@@ -14,6 +14,7 @@ Kawa addresses issues such as:
 - Difficulty mixing C# and F# in one application
 - Reusing application logic across Web API / RPC / Worker / CLI entry points
 - Lack of consistency around DTOs, UseCases, validation, results, and error handling
+- Lack of conventions that are easy for both humans and AI assistants to read
 - The absence of a Rails-like guided development flow in .NET
 
 Kawa aims to be designed like a river.
@@ -32,12 +33,14 @@ flowchart TD
     A[ASP.NET Core foundation] --> B[Kawa]
     B --> C[Contract-first]
     B --> D[UseCase-first]
+    B --> L[Convention-first]
     B --> E[C# / F# mixed domain]
     B --> F[Minimal API integration]
     B --> G[Future: RPC / Worker / CLI]
 
     C --> H[Request / Response / DTO]
     D --> I[Application UseCase]
+    L --> M[AI-friendly structure]
     E --> J[C# implementation]
     E --> K[F# implementation]
 ```
@@ -92,7 +95,9 @@ Instead, Kawa places the following three concepts at the center:
 - Response
 - UseCase
 
-A Web API is merely an entry point that exposes a UseCase to the outside world.
+A UseCase is the smallest unit that completes one business purpose.
+
+Web APIs and RPC APIs are merely entry points that expose UseCases to the outside world.
 
 ```mermaid
 flowchart LR
@@ -107,12 +112,50 @@ Therefore:
 - A UseCase does not know HTTP.
 - A UseCase does not reference ASP.NET Core.
 - A UseCase does not depend on controllers or Minimal APIs.
+- A UseCase does not depend on RPC service definitions or proto definitions.
+
+Transports are adapters that call UseCases.
+
+```mermaid
+flowchart TD
+    HTTP[HTTP Adapter] --> UseCase[UseCase]
+    RPC[RPC Adapter<br/>MagicOnion / gRPC] --> UseCase
+    CLI[CLI Adapter] --> UseCase
+    Worker[Worker Adapter] --> UseCase
+    UseCase --> Result[KawaResult / KawaError]
+```
 
 ---
 
-### 2.3 Let C# and F# flow into the same water system
+### 2.3 Convention-first / AI-friendly
 
-Kawa values the ability to write domain models and use cases in both C# and F#.
+Kawa prefers conventions over configuration.
+
+Conventions should be stable enough for both human developers and AI assistants to read predictably.
+
+In Kawa, AI-friendly does not mean adding special AI features.
+It means file names, type names, responsibilities, execution order, error representation, and transport boundaries are predictable.
+
+The basic conventions are:
+
+- Use one file per UseCase as the default unit.
+- Align UseCase names, Request names, Response names, Error names, and Test names.
+- Keep each UseCase's input, output, failures, dependencies, and execution flow easy to trace from one place.
+- Make Validation, Authorization, Transaction, Logging, and Error handling visible as pipelines.
+- Treat HTTP, RPC, CLI, and Worker entry points as Transport Adapters that call UseCases.
+- Do not let transport-specific concerns shape UseCase design.
+
+These conventions let both developers and AI assistants predict where to look and what they will find.
+
+---
+
+### 2.4 Let C# and F# flow into the same water system
+
+Kawa must be 100% viable with C# only.
+
+On top of that, Kawa values the ability to write domain models and use cases in both C# and F# where F# provides clear value.
+
+F# is especially suitable for Domain DSLs around complex business rules, state transitions, validation, rights evaluation, and pricing.
 
 However, Kawa should not leak F#-specific types directly into C# public APIs.  
 At the same time, Kawa should not weaken F#'s expressiveness just to satisfy C# conventions.
@@ -152,7 +195,7 @@ flowchart TD
 
 ---
 
-### 2.4 Use Minimal API as the main Web foundation
+### 2.5 Use Minimal API as the main Web foundation
 
 Kawa's Web integration should primarily use ASP.NET Core Minimal APIs.
 
@@ -181,7 +224,7 @@ flowchart TD
 
 ---
 
-### 2.5 Start thin and small
+### 2.6 Start thin and small
 
 Kawa should not start as a large framework.
 
@@ -422,8 +465,10 @@ However, it should not hide the overall business flow too much.
 
 Source files should follow the same discipline.
 
+- One UseCase should be complete in one source file by default.
 - One source file should serve one clear responsibility.
 - File names should state that responsibility and usually match the primary type or module they contain.
+- A UseCase file should gather the information needed to understand that UseCase's input, output, main failures, and execution flow.
 - Contracts, results, errors, UseCases, endpoints, and tests should be split when combining them would blur ownership or purpose.
 - A source file may contain closely scoped supporting code only when separating it would make the responsibility less clear.
 
@@ -507,6 +552,9 @@ This allows the same interface to be implemented from both C# and F#.
 
 F# implementations may freely use discriminated unions, option, result, and function composition internally.
 
+F# should be introduced only where it has clear value, especially for Domain DSLs and complex business rules.
+UseCases and adapters that are already clear in C# do not need to be pushed toward F#.
+
 However, before crossing Web or public boundaries, F# internal models should be converted into C# friendly DTOs or `KawaResult<T>`.
 
 ```mermaid
@@ -528,6 +576,7 @@ Kawa enables F#, but does not require F#.
 Kawa can be used with C# only.  
 F# can be introduced partially.  
 Complex rules or domain logic can be extracted into F# where useful.
+Templates and code generation should make F# usage an explicit choice.
 
 ---
 
@@ -606,9 +655,18 @@ However, Minimal API remains the center of Kawa.
 
 ### 10.2 MagicOnion / gRPC integration
 
-Consider integration with MagicOnion or gRPC as contract-first RPC layers.
+Consider MagicOnion and gRPC integration as Transport Adapters, not as the center of the application design.
 
 The same UseCase should be able to flow into both HTTP APIs and RPC APIs.
+
+However, UseCases should not be shaped around RPC specifications or proto-first design.
+RPC services, messages, proto definitions, and MagicOnion interfaces are adapters that expose existing UseCase contracts to the outside world.
+
+The Result / Error model should remain unified across HTTP and RPC.
+Transport differences belong inside adapter conversion logic.
+
+RPC integration is a strong future extension, but it should not be rushed into the MVP.
+UseCases, pipelines, Result / Error handling, and conventions should stabilize first.
 
 ---
 
@@ -801,6 +859,7 @@ Kawa allows UseCases and domain logic to be implemented in either C# or F#.
 
 F# is not required.  
 Kawa can be used entirely with C#.
+F# should be chosen where it has clear value, such as Domain DSLs or complex business rules.
 
 However, when dealing with complex business rules, state transitions, conditional branching, rights evaluation, pricing, revenue sharing, and validation, F# can be a powerful choice for expressing business logic more safely and clearly.
 
