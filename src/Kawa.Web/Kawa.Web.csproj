@@ -1,7 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
-    <ProjectReference Include="..\Kawa.Abstractions\Kawa.Abstractions.csproj" />
+    <ProjectReference Include="..\Kawa.Abstractions\Kawa.Abstractions.csproj" SkipGetTargetFrameworkProperties="true" />
     <ProjectReference Include="..\Kawa.Core\Kawa.Core.csproj" />
   </ItemGroup>
 
@@ -14,6 +14,8 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <Description>ASP.NET Core Minimal API adapter for executing Kawa use cases over HTTP.</Description>
+    <PackageTags>kawa;dotnet;aspnetcore;minimal-api;usecase</PackageTags>
   </PropertyGroup>
 
 </Project>

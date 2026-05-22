@@ -5,6 +5,8 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <Description>Core transport-independent contracts for Kawa use cases, results, and errors.</Description>
+    <PackageTags>kawa;dotnet;usecase;contracts;result</PackageTags>
   </PropertyGroup>
 
 </Project>

@@ -1,6 +1,20 @@
 <Project>
   <PropertyGroup>
+    <Version>0.1.0</Version>
+    <Authors>Kawa contributors</Authors>
+    <Company>Kawa contributors</Company>
+    <PackageProjectUrl>https://github.com/huideyeren/Kawa</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/huideyeren/Kawa</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
     <Copyright>Copyright (c) 2026 Kawa contributors</Copyright>
   </PropertyGroup>
+
+  <ItemGroup Condition="'$(IsPackable)' != 'false'">
+    <None Include="$(MSBuildThisFileDirectory)README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
 </Project>

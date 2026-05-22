@@ -9,6 +9,8 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <Description>Core execution pipeline for transport-independent Kawa use cases.</Description>
+    <PackageTags>kawa;dotnet;usecase;pipeline;result</PackageTags>
   </PropertyGroup>
 
 </Project>
