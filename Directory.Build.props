@@ -1,0 +1,6 @@
+<Project>
+  <PropertyGroup>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <Copyright>Copyright (c) 2026 Kawa contributors</Copyright>
+  </PropertyGroup>
+</Project>

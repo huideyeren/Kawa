@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Kawa.Web\Kawa.Web.csproj" />
+    <ProjectReference Include="..\Kawa.Sample.Mixed.UseCases\Kawa.Sample.Mixed.UseCases.fsproj" />
+  </ItemGroup>
+
+</Project>

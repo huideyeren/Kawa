@@ -1,0 +1,35 @@
+# .NET build output
+**/bin/
+**/obj/
+artifacts/
+
+# Test and coverage output
+**/TestResults/
+*.trx
+*.coverage
+*.coveragexml
+coverage/
+coverage.*
+
+# NuGet package output
+*.nupkg
+*.snupkg
+
+# Visual Studio and Rider
+.vs/
+.idea/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# VS Code local settings
+.vscode/
+
+# F# interactive and compiler scratch files
+*.fsi~
+*.fsx~
+
+# Operating system files
+.DS_Store
+Thumbs.db
