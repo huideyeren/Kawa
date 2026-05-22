@@ -313,6 +313,7 @@ This layer passes HTTP requests into UseCases and converts UseCase results into 
 - `MapKawaPost<TRequest, TResponse>`
 - Future extensions such as `MapKawaGet<...>`
 - Conversion from `KawaResult<T>` to `IResult`
+- `AddKawa()` dependency injection registration
 - OpenAPI metadata hooks
 - Minimal API endpoint registration
 
@@ -537,6 +538,7 @@ Kawa's first Web API integration uses Minimal API.
 Example:
 
 ```csharp
+builder.Services.AddKawa();
 app.MapKawaPost<CreateUserRequest, CreateUserResponse>("/users");
 ```
 
@@ -546,6 +548,16 @@ Kawa.Web should perform the following steps:
 2. Resolve `IUseCase<CreateUserRequest, CreateUserResponse>` from DI
 3. Execute it through `UseCaseExecutor`
 4. Convert `KawaResult<CreateUserResponse>` into an HTTP response
+
+The first HTTP contract is intentionally small:
+
+- `AddKawa()` registers the core Kawa services used by Kawa endpoints.
+- `MapKawaPost<TRequest, TResponse>` binds `TRequest` from the POST request body.
+- The mapped endpoint resolves `IUseCase<TRequest, TResponse>` and `UseCaseExecutor` from DI.
+- A successful `KawaResult<TResponse>` becomes `200 OK` with its value as the response body.
+- A failed `KawaResult<TResponse>` follows the status-code mapping in the Result / Error Model.
+
+This first contract does not yet define GET mapping, route or query binding, OpenAPI metadata, validation hooks, or a general response-shaping API.
 
 Users should not write business logic inside endpoints.
 

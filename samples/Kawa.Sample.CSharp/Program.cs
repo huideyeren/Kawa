@@ -1,10 +1,9 @@
 using Kawa.Abstractions;
-using Kawa.Core;
 using Kawa.Web;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddSingleton<UseCaseExecutor>();
+builder.Services.AddKawa();
 builder.Services.AddSingleton<IUseCase<CreateUserRequest, CreateUserResponse>, CreateUserUseCase>();
 
 var app = builder.Build();
