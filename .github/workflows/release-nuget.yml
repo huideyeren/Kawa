@@ -12,7 +12,7 @@ on:
         type: string
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   publish:
@@ -74,3 +74,16 @@ jobs:
         env:
           NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
         run: bash eng/push-nuget.sh
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.release.outputs.tag }}
+          VERSION: ${{ steps.release.outputs.version }}
+        run: |
+          gh release create "$TAG" \
+            artifacts/packages/*.nupkg \
+            artifacts/packages/*.snupkg \
+            --title "$TAG" \
+            --notes "NuGet packages for Kawa $VERSION." \
+            --verify-tag

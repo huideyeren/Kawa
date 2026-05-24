@@ -152,8 +152,8 @@ To publish the generated packages to NuGet.org:
 NUGET_API_KEY=... bash eng/push-nuget.sh
 ```
 
-NuGet releases are also published by GitHub Actions when a tag in `vX.Y.Z`
-format is pushed, for example:
+NuGet packages and GitHub Releases are published by GitHub Actions when a tag
+in `vX.Y.Z` format is pushed, for example:
 
 ```bash
 git tag v0.1.1
