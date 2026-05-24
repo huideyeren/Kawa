@@ -42,6 +42,20 @@ public class UseCaseExecutorTests
         Assert.Equal("Invalid input", result.Error.Message);
     }
 
+    /// <summary>
+    /// Verifies that the executor rejects a missing use case.
+    /// </summary>
+    [Fact]
+    public async Task ExecuteAsync_ThrowsForNullUseCase()
+    {
+        var executor = new UseCaseExecutor();
+
+        var exception = await Assert.ThrowsAsync<ArgumentNullException>(
+            () => executor.ExecuteAsync((IUseCase<int, string>)null!, 42));
+
+        Assert.Equal("useCase", exception.ParamName);
+    }
+
     private sealed class ExampleUseCase : IUseCase<int, string>
     {
         public Task<KawaResult<string>> ExecuteAsync(int request, CancellationToken cancellationToken = default)

@@ -9,6 +9,7 @@ on:
 
 permissions:
   contents: read
+  id-token: write
 
 jobs:
   build-and-test:
@@ -23,11 +24,30 @@ jobs:
         with:
           global-json-file: global.json
 
-      - name: Restore
-        run: dotnet restore Kawa.sln
+      - name: Restore and audit packages
+        run: |
+          dotnet restore Kawa.sln \
+            -p:NuGetAudit=true \
+            -p:NuGetAuditMode=all \
+            -p:NuGetAuditLevel=low \
+            "-warnaserror:NU1901;NU1902;NU1903;NU1904"
 
       - name: Build
         run: dotnet build Kawa.sln --no-restore
 
       - name: Test
-        run: dotnet test Kawa.sln --no-restore --no-build
+        run: >
+          dotnet test Kawa.sln
+          --no-restore
+          --no-build
+          --collect:"XPlat Code Coverage"
+          --results-directory TestResults
+          --
+          DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=cobertura
+
+      - name: Upload coverage
+        uses: codecov/codecov-action@v6
+        with:
+          files: TestResults/**/coverage.cobertura.xml
+          fail_ci_if_error: true
+          use_oidc: true

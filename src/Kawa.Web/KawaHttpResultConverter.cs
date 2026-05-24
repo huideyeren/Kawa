@@ -23,7 +23,7 @@ public static class KawaHttpResultConverter
             return Results.Ok(result.Value);
         }
 
-        var error = result.Error ?? new KawaError(KawaErrorKind.Unknown, "Unknown error");
+        var error = result.Error!;
 
         return error.Kind switch
         {

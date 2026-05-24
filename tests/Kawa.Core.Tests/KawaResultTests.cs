@@ -36,4 +36,15 @@ public class KawaResultTests
         Assert.Null(result.Value);
         Assert.Equal(error, result.Error);
     }
+
+    /// <summary>
+    /// Verifies that Kawa errors format their category and message.
+    /// </summary>
+    [Fact]
+    public void ToString_ReturnsKindAndMessage()
+    {
+        var error = new KawaError(KawaErrorKind.Conflict, "Already exists");
+
+        Assert.Equal("Conflict: Already exists", error.ToString());
+    }
 }

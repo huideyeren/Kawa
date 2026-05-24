@@ -44,6 +44,32 @@ public class KawaHttpResultConverterTests
     }
 
     /// <summary>
+    /// Verifies that a null result is rejected.
+    /// </summary>
+    [Fact]
+    public void ToIResult_ThrowsForNullResult()
+    {
+        var exception = Assert.Throws<ArgumentNullException>(
+            () => KawaHttpResultConverter.ToIResult<string>(null!));
+
+        Assert.Equal("result", exception.ParamName);
+    }
+
+    /// <summary>
+    /// Verifies that an unknown enum value becomes a problem response.
+    /// </summary>
+    [Fact]
+    public void ToIResult_ReturnsProblemForUnexpectedFailureKind()
+    {
+        var result = KawaResult<string>.Failure(new KawaError((KawaErrorKind)999, "Unexpected"));
+
+        var httpResult = Assert.IsAssignableFrom<IStatusCodeHttpResult>(
+            KawaHttpResultConverter.ToIResult(result));
+
+        Assert.Equal(StatusCodes.Status500InternalServerError, httpResult.StatusCode);
+    }
+
+    /// <summary>
     /// Gets the expected HTTP status codes for failed Kawa results.
     /// </summary>
     /// <returns>The Kawa error categories and expected HTTP status codes.</returns>

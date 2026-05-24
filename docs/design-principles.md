@@ -853,6 +853,27 @@ flowchart TD
 
 ---
 
+## 14. Test Coverage Policy
+
+Kawa treats 100% test coverage as a design goal.
+
+This does not mean that the number alone guarantees quality.  
+It is a constraint for avoiding unintentionally unverified lines and keeping each responsibility testable.
+
+Basic policy:
+
+- New code should maintain 100% coverage by default.
+- PR patches should also require 100% coverage.
+- Do not write hollow tests only to satisfy coverage.
+- Public APIs, UseCases, Result / Error conversion, and Endpoint conversion should be tested first.
+- If unreachable code or environment-dependent code is necessary, reconsider the design before treating it as an exception.
+- Code that is hard to test should be treated as a sign that responsibility splitting or side-effect isolation is insufficient.
+
+> Coverage is not the goal.  
+> It is the boundary that verifies the design remains testable.
+
+---
+
 ## 15. Advantages of Writing Business Logic in F#
 
 Kawa allows UseCases and domain logic to be implemented in either C# or F#.
