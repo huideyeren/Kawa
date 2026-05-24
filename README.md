@@ -138,7 +138,7 @@ dotnet test Kawa.sln \
   DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=cobertura
 ```
 
-The CI pipeline audits NuGet packages during restore and uploads coverage to Codecov. Project and patch coverage are configured to target 100%.
+The CI pipeline audits NuGet packages during restore and uploads coverage to Codecov using the repository secret `CODECOV_TOKEN`. Project and patch coverage are configured to target 100%.
 
 To create local NuGet packages:
 
