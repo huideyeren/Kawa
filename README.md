@@ -108,7 +108,13 @@ Run the mixed C# host + F# use case sample:
 dotnet run --project samples/Kawa.Sample.Mixed
 ```
 
-Both samples expose `POST /users`.
+Run the mixed C# host + VB.NET use case sample:
+
+```bash
+dotnet run --project samples/Kawa.Sample.VB
+```
+
+All samples expose `POST /users`.
 
 ## Development
 
@@ -145,6 +151,16 @@ To publish the generated packages to NuGet.org:
 ```bash
 NUGET_API_KEY=... bash eng/push-nuget.sh
 ```
+
+NuGet releases are also published by GitHub Actions when a tag in `vX.Y.Z`
+format is pushed, for example:
+
+```bash
+git tag v0.1.1
+git push origin v0.1.1
+```
+
+The release workflow uses the repository secret `NUGET_API_KEY`.
 
 See:
 
