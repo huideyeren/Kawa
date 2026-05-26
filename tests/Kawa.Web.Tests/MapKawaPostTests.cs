@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Text.Json;
 using Kawa.Abstractions;
 using Kawa.Web;
 using Microsoft.AspNetCore.Builder;
@@ -133,6 +134,60 @@ public sealed class MapKawaPostTests
         Assert.Contains("Users", tagsMetadata.Tags);
     }
 
+    /// <summary>
+    /// Verifies that Kawa web conventions expose an OpenAPI document with use case metadata.
+    /// </summary>
+    /// <returns>A task that represents the asynchronous test operation.</returns>
+    [Fact]
+    public async Task OpenApi_ExposesUseCaseContractAndErrorMetadata()
+    {
+        using var host = await StartOpenApiHostAsync();
+        using var client = host.GetTestClient();
+
+        using var document = await JsonDocument.ParseAsync(
+            await client.GetStreamAsync(KawaOpenApiDefaults.DocumentUrl));
+
+        var operation = document.RootElement
+            .GetProperty("paths")
+            .GetProperty("/users")
+            .GetProperty("post");
+        var responses = operation.GetProperty("responses");
+
+        Assert.Equal("users.create", operation.GetProperty("operationId").GetString());
+        Assert.Equal("Create user", operation.GetProperty("summary").GetString());
+        Assert.Contains(
+            operation.GetProperty("tags").EnumerateArray(),
+            tag => tag.GetString() == "Users");
+        Assert.True(operation.GetProperty("requestBody").TryGetProperty("content", out _));
+        Assert.True(responses.GetProperty("200").TryGetProperty("content", out _));
+        Assert.Equal(
+            "The supplied user fields are invalid.",
+            responses.GetProperty("400").GetProperty("description").GetString());
+        Assert.Equal(
+            "The requested resource was not found.",
+            responses.GetProperty("404").GetProperty("description").GetString());
+        Assert.Equal(
+            "The failure has no more specific application category.",
+            responses.GetProperty("500").GetProperty("description").GetString());
+    }
+
+    /// <summary>
+    /// Verifies that Kawa web conventions expose Swagger UI and ReDoc.
+    /// </summary>
+    /// <returns>A task that represents the asynchronous test operation.</returns>
+    [Fact]
+    public async Task OpenApi_ExposesSwaggerAndReDoc()
+    {
+        using var host = await StartOpenApiHostAsync();
+        using var client = host.GetTestClient();
+
+        var swaggerHtml = await client.GetStringAsync($"/{KawaOpenApiDefaults.SwaggerRoutePrefix}/index.html");
+        var redocHtml = await client.GetStringAsync($"/{KawaOpenApiDefaults.ReDocRoutePrefix}/index.html");
+
+        Assert.Contains("swagger-ui", swaggerHtml);
+        Assert.Contains("redoc", redocHtml);
+    }
+
     private static async Task<IHost> StartHostAsync(IUseCase<CreateUserRequest, CreateUserResponse> useCase)
     {
         return await new HostBuilder()
@@ -174,6 +229,36 @@ public sealed class MapKawaPostTests
                     app.UseRouting();
                     app.UseEndpoints(endpoints =>
                         endpoints.MapKawaPost<ConventionalCreateUser>("/users"));
+                });
+            })
+            .StartAsync();
+    }
+
+    private static async Task<IHost> StartOpenApiHostAsync()
+    {
+        return await new HostBuilder()
+            .ConfigureWebHost(webHost =>
+            {
+                webHost.UseTestServer();
+                webHost.ConfigureServices(services =>
+                {
+                    services.AddRouting();
+                    services.AddKawa();
+                    services.AddKawaWeb();
+                    services.AddSingleton<
+                        IUseCase<ConventionalCreateUser.Request, ConventionalCreateUser.Response>,
+                        ConventionalCreateUser>();
+                });
+                webHost.Configure(app =>
+                {
+                    app.UseRouting();
+                    app.MapKawaSwagger();
+                    app.MapKawaReDoc();
+                    app.UseEndpoints(endpoints =>
+                    {
+                        endpoints.MapKawaPost<ConventionalCreateUser>("/users");
+                        endpoints.MapKawaOpenApi();
+                    });
                 });
             })
             .StartAsync();

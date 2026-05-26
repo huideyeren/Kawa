@@ -392,7 +392,7 @@ Default policy:
 - `AddKawa()` registers Kawa's OpenAPI metadata provider
 - `AddKawaWeb()` or a future Web setup API registers ASP.NET Core OpenAPI services
 - `MapKawaPost<TUseCase>` reflects `TRequest` / `TResponse` into the OpenAPI schema
-- Swagger UI and ReDoc are enabled by default in development
+- Swagger UI and ReDoc are mapped by the application in development
 - UI exposure in production is explicit opt-in
 - `/openapi/{documentName}.json` is the default OpenAPI document path candidate
 - `/swagger` and `/redoc` are the default UI path candidates

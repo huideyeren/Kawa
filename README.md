@@ -66,16 +66,26 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.Services
     .AddKawa()
-    .AddKawaUseCasesFromAssemblies(typeof(CreateUser).Assembly);
+    .AddKawaUseCasesFromAssemblies(typeof(CreateUser).Assembly)
+    .AddKawaWeb();
 
 var app = builder.Build();
 
 app.MapKawaPost<CreateUser>("/users");
+app.MapKawaOpenApi();
+
+if (app.Environment.IsDevelopment())
+{
+    app.MapKawaSwagger();
+    app.MapKawaReDoc();
+}
 
 app.Run();
 ```
 
-Kawa.Web is intended to expose the same contracts through OpenAPI. The convention is that Kawa request/response contracts are the source of the OpenAPI schema, with Swagger UI and ReDoc available by default in development once the Web OpenAPI setup is enabled.
+Kawa.Web exposes the same contracts through OpenAPI at `/openapi/v1.json`. Swagger UI is available at `/swagger` and ReDoc is available at `/redoc` when the corresponding Kawa UI middleware is mapped. The convention is that Kawa request/response contracts are the source of the OpenAPI schema.
+
+The documentation UIs are middleware, so map them only where they should be public. The recommended default is development-only; exposing `/swagger` or `/redoc` in production should be an explicit application decision.
 
 Use case metadata and error response attributes are transport-independent. Kawa.Web maps them to OpenAPI, and future RPC / CLI / Worker adapters can use the same API catalog.
 

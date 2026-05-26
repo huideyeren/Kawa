@@ -264,7 +264,7 @@ OpenAPI schema の中心は `Contracts/` の `Request` / `Response` である。
 規約:
 
 - `Kawa.Web` を setup すると OpenAPI document を生成できる
-- development 環境では Swagger UI と ReDoc を既定で使えるようにする
+- development 環境では application が Swagger UI と ReDoc を map する
 - production 環境で Swagger UI / ReDoc を公開する場合は明示 opt-in にする
 - `MapKawaPost<TUseCase>` は `IUseCase<TRequest,TResponse>` から OpenAPI request / response schema を推論する
 - `MapKawaPost<TUseCase>` は UseCase catalog metadata を endpoint name / summary / description / tags に反映する
@@ -301,6 +301,9 @@ if (app.Environment.IsDevelopment())
     app.MapKawaReDoc();
 }
 ```
+
+`MapKawaSwagger()` と `MapKawaReDoc()` は application middleware である。
+UI を公開してはいけない環境では、environment または authorization の判断の内側に置く。
 
 OpenAPI の情報源:
 

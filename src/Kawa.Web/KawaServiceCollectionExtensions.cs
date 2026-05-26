@@ -1,5 +1,6 @@
 using Kawa.Core;
 using Kawa.Abstractions;
+using Microsoft.AspNetCore.OpenApi;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -25,6 +26,21 @@ public static class KawaServiceCollectionExtensions
         services.TryAddSingleton<IResultMapper<IResult>, KawaHttpSuccessMapper>();
         services.TryAddSingleton<IErrorMapper<IResult>, KawaHttpErrorMapper>();
         services.TryAddSingleton<ITransportMapper<IResult>, KawaHttpTransportMapper>();
+
+        return services;
+    }
+
+    /// <summary>
+    /// Registers Kawa web conventions, including OpenAPI document generation.
+    /// </summary>
+    /// <param name="services">The service collection to update.</param>
+    /// <returns>The supplied service collection.</returns>
+    public static IServiceCollection AddKawaWeb(this IServiceCollection services)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+
+        services.AddOpenApi(options =>
+            options.AddOperationTransformer(KawaOpenApiOperationTransformer.TransformAsync));
 
         return services;
     }

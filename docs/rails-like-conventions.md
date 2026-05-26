@@ -264,7 +264,7 @@ The center of the OpenAPI schema is `Contracts/` Request / Response.
 Rules:
 
 - Setting up `Kawa.Web` makes an OpenAPI document available
-- Swagger UI and ReDoc are available by default in development
+- Swagger UI and ReDoc are mapped by the application in development
 - Exposing Swagger UI / ReDoc in production is explicit opt-in
 - `MapKawaPost<TUseCase>` infers OpenAPI request / response schemas from `IUseCase<TRequest,TResponse>`
 - `MapKawaPost<TUseCase>` maps UseCase catalog metadata to endpoint name / summary / description / tags
@@ -301,6 +301,8 @@ if (app.Environment.IsDevelopment())
     app.MapKawaReDoc();
 }
 ```
+
+`MapKawaSwagger()` and `MapKawaReDoc()` are application middleware. They should stay inside an environment or authorization decision when the UI must not be publicly reachable.
 
 OpenAPI sources:
 
