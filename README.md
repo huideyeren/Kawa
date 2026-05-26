@@ -21,55 +21,63 @@ dotnet add package Kawa.Web
 
 ## Quick Start
 
-Define request and response contracts:
+Define one use case under `UseCases/`, with its request and response contracts nested in the same source file:
 
 ```csharp
-public sealed record CreateUserRequest(string Name);
-
-public sealed record CreateUserResponse(string Message);
-```
-
-Implement a use case:
-
-```csharp
+// UseCases/CreateUser.cs
 using Kawa.Abstractions;
 
-public sealed class CreateUserUseCase
-    : IUseCase<CreateUserRequest, CreateUserResponse>
+[KawaUseCase(
+    "users.create",
+    Summary = "Create user",
+    Description = "Creates a user account.",
+    Version = "v1",
+    Tags = new[] { "Users" })]
+[KawaErrorResponse(KawaErrorKind.Validation, Description = "Name is required.")]
+public sealed class CreateUser
+    : IUseCase<CreateUser.Request, CreateUser.Response>
 {
-    public Task<KawaResult<CreateUserResponse>> ExecuteAsync(
-        CreateUserRequest request,
+    public sealed record Request(string Name);
+
+    public sealed record Response(string Message);
+
+    public Task<KawaResult<Response>> ExecuteAsync(
+        Request request,
         CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(request.Name))
         {
             var error = new KawaError(KawaErrorKind.Validation, "Name is required.");
-            return Task.FromResult(KawaResult<CreateUserResponse>.Failure(error));
+            return Task.FromResult(KawaResult<Response>.Failure(error));
         }
 
-        var response = new CreateUserResponse($"Created user {request.Name}.");
-        return Task.FromResult(KawaResult<CreateUserResponse>.Success(response));
+        var response = new Response($"Created user {request.Name}.");
+        return Task.FromResult(KawaResult<Response>.Success(response));
     }
 }
 ```
 
-Register Kawa, register the use case, and map it as a Minimal API endpoint:
+Register Kawa, scan for use cases, and map the endpoint from the use case type:
 
 ```csharp
-using Kawa.Abstractions;
 using Kawa.Web;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddKawa();
-builder.Services.AddSingleton<IUseCase<CreateUserRequest, CreateUserResponse>, CreateUserUseCase>();
+builder.Services
+    .AddKawa()
+    .AddKawaUseCasesFromAssemblies(typeof(CreateUser).Assembly);
 
 var app = builder.Build();
 
-app.MapKawaPost<CreateUserRequest, CreateUserResponse>("/users");
+app.MapKawaPost<CreateUser>("/users");
 
 app.Run();
 ```
+
+Kawa.Web is intended to expose the same contracts through OpenAPI. The convention is that Kawa request/response contracts are the source of the OpenAPI schema, with Swagger UI and ReDoc available by default in development once the Web OpenAPI setup is enabled.
+
+Use case metadata and error response attributes are transport-independent. Kawa.Web maps them to OpenAPI, and future RPC / CLI / Worker adapters can use the same API catalog.
 
 Then call the endpoint:
 
@@ -81,7 +89,9 @@ curl -X POST http://localhost:5000/users \
 
 ## Result to HTTP Mapping
 
-`MapKawaPost<TRequest,TResponse>` resolves the matching `IUseCase<TRequest,TResponse>` from dependency injection, executes it through `UseCaseExecutor`, and converts the result to an ASP.NET Core `IResult`.
+`MapKawaPost<TUseCase>` reads the matching `IUseCase<TRequest,TResponse>` contract from the use case type, resolves that contract from dependency injection, executes it through `UseCaseExecutor`, and converts the result to an ASP.NET Core `IResult`.
+
+`MapKawaPost<TRequest,TResponse>` is also available when you want to map explicit request and response types.
 
 Current failure mappings:
 
@@ -165,7 +175,9 @@ The release workflow uses the repository secret `NUGET_API_KEY`.
 See:
 
 - [Design Principles](docs/design-principles.md)
+- [Rails-like Convention Proposal](docs/rails-like-conventions.md)
 - [設計思想メモ 日本語版](docs/design-principles.ja.md)
+- [Rails-like Convention Proposal 日本語版](docs/rails-like-conventions.ja.md)
 
 ## License
 
