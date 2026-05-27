@@ -11,7 +11,7 @@ Kawa addresses issues such as:
 
 - Business logic leaking into HTTP layers
 - Controllers or endpoints becoming places where domain logic accumulates
-- Difficulty mixing C# and F# in one application
+- Difficulty mixing C#, F#, VB.NET, and other CLR languages in one application
 - Reusing application logic across Web API / RPC / Worker / CLI entry points
 - Lack of consistency around DTOs, UseCases, validation, results, and error handling
 - Lack of conventions that are easy for both humans and AI assistants to read
@@ -23,7 +23,7 @@ Kawa aims to be designed like a river.
 - UseCases are streams.
 - Web endpoints are gates.
 - Core is the riverbed that keeps the flow clean.
-- C# and F# are tributaries joining the same water system.
+- C#, F#, VB.NET, and other CLR languages are tributaries joining the same water system.
 
 Kawa is not a framework that dominates the application.  
 Kawa is a framework that shapes the flow.
@@ -34,7 +34,7 @@ flowchart TD
     B --> C[Contract-first]
     B --> D[UseCase-first]
     B --> L[Convention-first]
-    B --> E[C# / F# mixed domain]
+    B --> E[CLR language mixed domain]
     B --> F[Minimal API integration]
     B --> G[Future: RPC / Worker / CLI]
 
@@ -42,7 +42,7 @@ flowchart TD
     D --> I[Application UseCase]
     L --> M[AI-friendly structure]
     E --> J[C# implementation]
-    E --> K[F# implementation]
+    E --> K[F# / VB.NET / experimental CLR language implementation]
 ```
 
 ---
@@ -149,16 +149,20 @@ These conventions let both developers and AI assistants predict where to look an
 
 ---
 
-### 2.4 Let C# and F# flow into the same water system
+### 2.4 Let CLR languages flow into the same water system
 
-Kawa must be 100% viable with C# only.
+Kawa must be 100% viable with C# only. Every major design must remain natural to implement in C# alone.
 
-On top of that, Kawa values the ability to write domain models and use cases in both C# and F# where F# provides clear value.
+On top of that, Kawa values allowing developers who are strong in F#, VB.NET, or other CLR-hosted languages to choose those languages naturally as long as they keep the boundaries intact.
 
-F# is especially suitable for Domain DSLs around complex business rules, state transitions, validation, rights evaluation, and pricing.
+F# is especially suitable for domain models, Domain DSLs, complex business rules, state transitions, validation, rights evaluation, and pricing.
+VB.NET can also be a normal implementation target when existing assets or team expertise make it appropriate.
+Languages such as IronPython should be treated as experimental implementation targets for now.
+[MRubyCS](https://github.com/hadashiA/MRubyCS) should be treated less as a normal CLR language implementation and more as an experimental Rails-like DSL / scripting adapter that runs on MRuby.
 
-However, Kawa should not leak F#-specific types directly into C# public APIs.  
-At the same time, Kawa should not weaken F#'s expressiveness just to satisfy C# conventions.
+However, Kawa should not leak language-specific types or runtime representations directly into C# public APIs.
+
+At the same time, Kawa should not weaken each language's expressiveness merely to satisfy C# conventions.
 
 For this reason, Kawa's boundary types should be C# friendly:
 
@@ -168,13 +172,14 @@ For this reason, Kawa's boundary types should be C# friendly:
 - class
 - simple DTO
 
-Inside implementations, F# can freely use its own expressive tools:
+Inside domain boundaries, each language can freely use its own expressive tools:
 
 - discriminated unions
 - option
 - result
 - function composition
 - pattern matching
+- language-specific domain models
 
 The design principle is:
 
@@ -185,11 +190,13 @@ flowchart TD
     Contract[C# friendly boundary<br/>interfaces / records / DTOs]
     CSharp[C# UseCase implementation]
     FSharp[F# UseCase implementation]
+    OtherClr[VB.NET / experimental CLR language implementation]
     InternalFSharp[F# internal model<br/>DU / option / result]
     App[Kawa Core / Web]
 
     CSharp --> Contract
     FSharp --> InternalFSharp --> Contract
+    OtherClr --> Contract
     Contract --> App
 ```
 
@@ -314,7 +321,7 @@ This layer should be the most stable layer, and it must not contain ASP.NET Core
 - Must not depend on Kawa.Web
 - Must not depend on EF Core
 - Must not depend on infrastructure
-- Must not expose F#-specific types in public APIs
+- Must not expose F# or other language-specific types in public APIs
 
 ---
 
@@ -358,6 +365,8 @@ This layer passes HTTP requests into UseCases and converts UseCase results into 
 - Conversion from `KawaResult<T>` to `IResult`
 - `AddKawa()` dependency injection registration
 - OpenAPI metadata hooks
+- Contract-first OpenAPI document generation
+- Default Swagger UI / ReDoc setup
 - Minimal API endpoint registration
 
 #### Dependency rules
@@ -366,6 +375,45 @@ This layer passes HTTP requests into UseCases and converts UseCase results into 
 - May depend on Kawa.Abstractions
 - May depend on Kawa.Core
 - Must not contain domain logic
+
+---
+
+### 3.3.1 OpenAPI / Swagger / ReDoc integration
+
+Kawa.Web treats OpenAPI as contract-first.
+
+The source of an OpenAPI document is not the endpoint implementation. It is Kawa's `Request` / `Response` contracts.
+Mapping APIs such as `MapKawaPost<TUseCase>` infer request schemas, response schemas, and error schemas from the `IUseCase<TRequest,TResponse>` contract implemented by the UseCase, then attach that information as Minimal API OpenAPI metadata.
+
+When Kawa.Web is set up, developers should be able to inspect the API contract without extra ceremony.
+
+Default policy:
+
+- `AddKawa()` registers Kawa's OpenAPI metadata provider
+- `AddKawaWeb()` or a future Web setup API registers ASP.NET Core OpenAPI services
+- `MapKawaPost<TUseCase>` reflects `TRequest` / `TResponse` into the OpenAPI schema
+- Swagger UI and ReDoc are mapped by the application in development
+- UI exposure in production is explicit opt-in
+- `/openapi/{documentName}.json` is the default OpenAPI document path candidate
+- `/swagger` and `/redoc` are the default UI path candidates
+
+OpenAPI responsibility split:
+
+```mermaid
+flowchart LR
+    Contract[Contracts<br/>Request / Response] --> Metadata[Kawa OpenAPI Metadata]
+    UseCase[IUseCase&lt;TRequest,TResponse&gt;] --> Metadata
+    Endpoint[MapKawaPost&lt;TUseCase&gt;] --> Metadata
+    Metadata --> Document[OpenAPI document]
+    Document --> Swagger[Swagger UI]
+    Document --> ReDoc[ReDoc]
+```
+
+Endpoints describe routes and transport binding, but they are not the center of the API schema.
+The API schema starts from Contracts; Endpoints declare which URL / method exposes those Contracts.
+
+Therefore, creating separate DTOs such as `CreateUserHttpRequest` or `CreateUserSwaggerDto` solely for OpenAPI should be avoided by default.
+When a transport-specific input shape is necessary, it should still be converted into Kawa `Request` / `Response` contracts so the OpenAPI contract remains centered on Kawa contracts.
 
 ---
 
@@ -390,6 +438,7 @@ F# support is optional and must not be forced into Kawa's core.
 - May depend on Kawa.Core if necessary
 - Should generally not depend on Kawa.Web
 - Must not leak F#-specific concepts into Kawa.Abstractions
+- Other CLR language support must also keep language-specific concepts out of Kawa.Abstractions
 
 ---
 
@@ -529,7 +578,7 @@ Kawa.Core does not know HTTP status codes.
 
 ---
 
-## 8. C# / F# Mixed Usage Policy
+## 8. CLR Language Mixed Usage Policy
 
 ### 8.1 Keep boundaries C# friendly
 
@@ -544,7 +593,39 @@ public interface IUseCase<TRequest, TResponse>
 }
 ```
 
-This allows the same interface to be implemented from both C# and F#.
+This allows the same interface to be implemented from C#, F#, VB.NET, and other CLR languages.
+
+In Kawa, the unit of language mixing is the project / assembly, not the source file.
+
+In practical .NET terms, one project usually means one language compiler. Kawa should not make mixing C#, F#, and VB.NET source files inside one `.csproj`, `.fsproj`, or `.vbproj` the standard convention.
+Instead, one solution / application may contain separate C#, F#, and VB.NET projects that all reference the same C# friendly contract boundary.
+
+The recommended structure is:
+
+```text
+MyApp.Contracts        # C#. Request / Response / Error contracts
+MyApp.UseCases.CSharp  # C# UseCase implementation
+MyApp.UseCases.FSharp  # F# UseCases / domain rules
+MyApp.UseCases.VB      # VB.NET UseCase implementation
+MyApp.Web              # ASP.NET Core / Kawa.Web endpoints
+MyApp.Cli              # optional CLI adapter
+MyApp.Worker           # optional Worker adapter
+```
+
+Dependencies should stay contract-first.
+
+```mermaid
+flowchart BT
+    CSharpUseCases[MyApp.UseCases.CSharp] --> Contracts[MyApp.Contracts<br/>C# boundary]
+    FSharpUseCases[MyApp.UseCases.FSharp] --> Contracts
+    VBUseCases[MyApp.UseCases.VB] --> Contracts
+    Web[MyApp.Web] --> Contracts
+    Web --> CSharpUseCases
+    Web --> FSharpUseCases
+    Web --> VBUseCases
+```
+
+With this structure, Web / RPC / CLI / Worker adapters do not need to know which language implements a UseCase. They only see `IUseCase<TRequest,TResponse>` and Kawa `Request` / `Response` contracts.
 
 ---
 
@@ -552,8 +633,11 @@ This allows the same interface to be implemented from both C# and F#.
 
 F# implementations may freely use discriminated unions, option, result, and function composition internally.
 
-F# should be introduced only where it has clear value, especially for Domain DSLs and complex business rules.
+F# may be chosen more broadly than just Domain DSLs or complex business rules, as long as it remains contained inside domain-model boundaries.
+The important constraint is not whether F# is used, but whether F#-specific representations stay out of Kawa's public boundaries.
+
 UseCases and adapters that are already clear in C# do not need to be pushed toward F#.
+At the same time, developers who are productive in F# should not be blocked from choosing it inside domain boundaries.
 
 However, before crossing Web or public boundaries, F# internal models should be converted into C# friendly DTOs or `KawaResult<T>`.
 
@@ -569,14 +653,61 @@ flowchart LR
 
 ---
 
-### 8.3 Do not force a language choice
+### 8.3 Support other CLR languages inside boundaries
 
-Kawa enables F#, but does not require F#.
+The same policy applies to CLR languages beyond F#.
+
+VB.NET may be treated as a normal .NET implementation language, just like C# and F#.
+When a UseCase or domain model is written in VB.NET, its boundary should still be expressed through C# friendly interfaces, records, classes, DTOs, and `KawaResult<T>`.
+
+Languages such as IronPython should be treated as experimental implementation targets for now.
+Domain logic written in those languages must still be converted to C# friendly contracts before it reaches Kawa's public boundary.
+
+When Kawa supports [MRubyCS](https://github.com/hadashiA/MRubyCS), the primary goal should not be implementing Kawa UseCases directly in Ruby.
+Instead, Kawa should expose a small Rails-compatible-style method surface that can run within MRuby's limits.
+This is not full Rails compatibility; it is a minimal DSL aligned with Kawa's contract-first / usecase-first model.
+
+An MRubyCS adapter may expose vocabulary such as:
+
+- `params`
+- `permit`
+- `validate`
+- `before_action`
+- `render`
+- `redirect_to`
+- `ok`
+- `created`
+- `not_found`
+- `unprocessable_entity`
+- `usecase`
+
+These methods should not pull ASP.NET Core or Kawa's public APIs toward Ruby.
+They are a thin adapter that gives Ruby code a Rails-like feel while converting back to C# friendly DTOs, `KawaResult<T>`, and HTTP results at the boundary.
+
+Experimental CLR language support does not guarantee:
+
+- Standard templates
+- Complete samples
+- Stable NuGet package APIs
+- The same maintenance priority as C#, F#, or VB.NET
+- Full Rails API compatibility
+
+However, as long as the boundary is respected, Kawa's design should not exclude those languages.
+
+---
+
+### 8.4 Do not force a language choice
+
+Kawa enables multiple CLR languages, but does not require any specific one.
 
 Kawa can be used with C# only.  
 F# can be introduced partially.  
+VB.NET can be introduced.
+IronPython, MRubyCS, and similar languages can be introduced experimentally.
+Domain models and use cases can be implemented in F#.
 Complex rules or domain logic can be extracted into F# where useful.
-Templates and code generation should make F# usage an explicit choice.
+In every case, the same behavior should remain possible to express in C# alone.
+Templates and code generation should make non-C# language usage an explicit choice.
 
 ---
 
@@ -680,6 +811,7 @@ Example:
 dotnet kawa new webapp MyApp
 dotnet kawa generate usecase CreateUser --lang csharp
 dotnet kawa generate usecase CreateUser --lang fsharp
+dotnet kawa generate usecase CreateUser --lang vb
 dotnet kawa generate endpoint CreateUser --method post --path /users
 ```
 
@@ -691,6 +823,8 @@ Provide `dotnet new` templates.
 
 - C# only
 - Mixed C# / F#
+- Mixed C# / F# / VB.NET
+- Experimental CLR language integration
 - API only
 - Web + Worker
 - MagicOnion enabled
@@ -733,7 +867,7 @@ The initial design of Kawa should avoid:
 - Making controllers the center
 - Introducing HTTP concepts into Core
 - Adding ASP.NET Core dependencies to Abstractions
-- Leaking F#-specific types into public APIs
+- Leaking F# or other language-specific types into public APIs
 - Adding EF Core or authentication from the beginning
 - Depending on MediatR
 - Introducing code generation too early
@@ -749,7 +883,7 @@ flowchart TD
     Bad --> InfraLeak[Infrastructure leaking into Domain]
     Bad --> Over[Over-engineering]
     Bad --> God[God classes]
-    Bad --> ForcedFSharp[Forcing F# concepts into C# APIs]
+    Bad --> ForcedLanguage[Forcing language-specific concepts into C# APIs]
 ```
 
 ---
@@ -760,6 +894,8 @@ Kawa is a river.
 
 - C# is the great river.
 - F# is a clear stream.
+- VB.NET is an old tributary.
+- Experimental CLR languages are small test waterways.
 - Contracts are waterways.
 - UseCases are flows.
 - Endpoints are gates.
@@ -777,6 +913,8 @@ It lets applications flow naturally.
 flowchart LR
     CSharp[C# great river] --> Contract[Contract waterway]
     FSharp[F# clear stream] --> Contract
+    VB[VB.NET tributary] --> Contract
+    Experimental[Experimental CLR language] -.experimental.-> Contract
     Contract --> UseCase[UseCase flow]
     UseCase --> Endpoint[Endpoint gate]
     Endpoint --> Response[Response river mouth]
@@ -876,11 +1014,13 @@ Basic policy:
 
 ## 15. Advantages of Writing Business Logic in F#
 
-Kawa allows UseCases and domain logic to be implemented in either C# or F#.
+Kawa allows UseCases and domain logic to be implemented in C#, F#, VB.NET, and other CLR languages.
 
 F# is not required.  
 Kawa can be used entirely with C#.
-F# should be chosen where it has clear value, such as Domain DSLs or complex business rules.
+Every major feature should remain implementable in C# alone.
+
+On top of that, F# may be chosen not only for Domain DSLs or complex business rules, but anywhere it can remain contained as a domain model behind Kawa's C# friendly boundaries.
 
 However, when dealing with complex business rules, state transitions, conditional branching, rights evaluation, pricing, revenue sharing, and validation, F# can be a powerful choice for expressing business logic more safely and clearly.
 
@@ -1110,24 +1250,37 @@ F# is especially useful in Kawa for:
 
 ---
 
-### 15.8 Division of responsibilities between C# and F#
+### 15.8 Division of responsibilities between C#, F#, VB.NET, and experimental CLR languages
 
 Kawa does not require everything to be written in F#.
 
 C# is strong at connecting applications to the real runtime environment: ASP.NET Core, Minimal API, DI, DTOs, OpenAPI, EF Core, and infrastructure.
 
+However, Kawa's recommended language mixing model is not putting multiple languages' source files into one project.
+C#, F#, and VB.NET should live in separate `.csproj`, `.fsproj`, and `.vbproj` projects, then join in the same solution / application.
+The boundary `Contracts` project should preferably be C#, and every UseCase project and Transport project should reference those C# contracts.
+
 F# is strong at expressing business rules themselves without muddying the logic.
+Developers who are productive in F# may write broader domain implementations in F#, as long as those implementations do not cross domain boundaries.
+Developers who are productive in VB.NET may also choose it as a normal implementation language when the same boundaries are respected.
+IronPython and similar languages are experimental choices and must not become dependencies of Kawa's core or public APIs.
+MRubyCS should be treated as a Rails-compatible-style DSL / scripting adapter rather than as the primary way to implement UseCases directly in Ruby.
+However, external contracts, public APIs, templates, and samples should remain viable with C# alone.
 
 ```mermaid
 flowchart TD
     CSharp[C#]
     FSharp[F#]
+    VB[VB.NET]
+    Experimental[Experimental CLR language]
     Web[Web / API / DI / Infrastructure]
     Logic[Business Logic / Rules / State transitions]
     Boundary[Kawa Abstractions<br/>C# friendly boundary]
 
     CSharp --> Web
     FSharp --> Logic
+    VB --> Logic
+    Experimental -.experimental.-> Logic
     Web --> Boundary
     Logic --> Boundary
 ```
@@ -1136,13 +1289,13 @@ In one sentence:
 
 > C# is strong at connecting business applications to reality, while F# is strong at expressing business rules without muddying them.
 
-Kawa is a framework that lets both flow into the same river.
+Kawa is a framework that lets those CLR languages flow into the same river.
 
 ---
 
 ## 16. One-sentence Summary
 
-Kawa is a contract-first .NET web framework that lays a thin waterway on top of ASP.NET Core and lets UseCases / Domain Logic written in C# and F# flow naturally into Minimal APIs and future RPC entry points.
+Kawa is a contract-first .NET web framework that lays a thin waterway on top of ASP.NET Core and lets UseCases / Domain Logic written in C#, F#, VB.NET, and experimental CLR languages flow naturally into Minimal APIs and future RPC entry points.
 
 Kawa is not a framework that dominates.  
 Kawa is a framework that shapes the flow.

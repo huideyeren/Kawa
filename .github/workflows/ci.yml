@@ -9,7 +9,6 @@ on:
 
 permissions:
   contents: read
-  id-token: write
 
 jobs:
   build-and-test:
@@ -48,6 +47,6 @@ jobs:
       - name: Upload coverage
         uses: codecov/codecov-action@v6
         with:
+          token: ${{ secrets.CODECOV_TOKEN }}
           files: TestResults/**/coverage.cobertura.xml
           fail_ci_if_error: true
-          use_oidc: true

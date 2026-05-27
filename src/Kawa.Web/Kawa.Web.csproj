@@ -9,13 +9,19 @@
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
   </ItemGroup>
 
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.0" />
+    <PackageReference Include="Swashbuckle.AspNetCore.ReDoc" Version="10.1.7" />
+    <PackageReference Include="Swashbuckle.AspNetCore.SwaggerUI" Version="10.1.7" />
+  </ItemGroup>
+
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <Description>ASP.NET Core Minimal API adapter for executing Kawa use cases over HTTP.</Description>
-    <PackageTags>kawa;dotnet;aspnetcore;minimal-api;usecase</PackageTags>
+    <PackageTags>kawa;dotnet;aspnetcore;minimal-api;usecase;openapi;swagger;redoc</PackageTags>
   </PropertyGroup>
 
 </Project>

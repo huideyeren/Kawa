@@ -2,6 +2,8 @@
 
 Kawa is a contract-first .NET web framework that lays a thin waterway on top of ASP.NET Core.
 
+Kawa keeps application flow centered on request/response contracts and use cases. ASP.NET Core stays as the host and transport layer; Kawa only provides the small boundary pieces needed to execute use cases and translate `KawaResult<T>` values into HTTP responses.
+
 ## Packages
 
 - `Kawa.Abstractions`: shared use case, result, and error contracts
@@ -9,9 +11,154 @@ Kawa is a contract-first .NET web framework that lays a thin waterway on top of 
 - `Kawa.Web`: ASP.NET Core Minimal API integration
 - `Kawa.FSharp`: F# helpers
 
+## Installation
+
 ```bash
 dotnet add package Kawa.Web
 ```
+
+`Kawa.Web` brings in the core Kawa runtime pieces needed for ASP.NET Core Minimal API integration.
+
+## Quick Start
+
+Define one use case under `UseCases/`, with its request and response contracts nested in the same source file:
+
+```csharp
+// UseCases/CreateUser.cs
+using Kawa.Abstractions;
+
+[KawaUseCase(
+    "users.create",
+    Summary = "Create user",
+    Description = "Creates a user account.",
+    Version = "v1",
+    Tags = new[] { "Users" })]
+[KawaErrorResponse(KawaErrorKind.Validation, Description = "Name is required.")]
+public sealed class CreateUser
+    : IUseCase<CreateUser.Request, CreateUser.Response>
+{
+    public sealed record Request(string Name);
+
+    public sealed record Response(string Message);
+
+    public Task<KawaResult<Response>> ExecuteAsync(
+        Request request,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(request.Name))
+        {
+            var error = new KawaError(KawaErrorKind.Validation, "Name is required.");
+            return Task.FromResult(KawaResult<Response>.Failure(error));
+        }
+
+        var response = new Response($"Created user {request.Name}.");
+        return Task.FromResult(KawaResult<Response>.Success(response));
+    }
+}
+```
+
+Register Kawa, scan for use cases, and map the endpoint from the use case type:
+
+```csharp
+using Kawa.Web;
+
+var builder = WebApplication.CreateBuilder(args);
+
+builder.Services
+    .AddKawa()
+    .AddKawaUseCasesFromAssemblies(typeof(CreateUser).Assembly)
+    .AddKawaWeb();
+
+var app = builder.Build();
+
+app.MapKawaPost<CreateUser>("/users");
+app.MapKawaOpenApi();
+
+if (app.Environment.IsDevelopment())
+{
+    app.MapKawaSwagger();
+    app.MapKawaReDoc();
+}
+
+app.Run();
+```
+
+Kawa.Web exposes the same contracts through OpenAPI at `/openapi/v1.json`. Swagger UI is available at `/swagger` and ReDoc is available at `/redoc` when the corresponding Kawa UI middleware is mapped. The convention is that Kawa request/response contracts are the source of the OpenAPI schema.
+
+The documentation UIs are middleware, so map them only where they should be public. The recommended default is development-only; exposing `/swagger` or `/redoc` in production should be an explicit application decision.
+
+Use case metadata and error response attributes are transport-independent. Kawa.Web maps them to OpenAPI, and future RPC / CLI / Worker adapters can use the same API catalog.
+
+Then call the endpoint:
+
+```bash
+curl -X POST http://localhost:5000/users \
+  -H "Content-Type: application/json" \
+  -d '{"name":"Louisa"}'
+```
+
+## Result to HTTP Mapping
+
+`MapKawaPost<TUseCase>` reads the matching `IUseCase<TRequest,TResponse>` contract from the use case type, resolves that contract from dependency injection, executes it through `UseCaseExecutor`, and converts the result to an ASP.NET Core `IResult`.
+
+`MapKawaPost<TRequest,TResponse>` is also available when you want to map explicit request and response types.
+
+Current failure mappings:
+
+| `KawaErrorKind` | HTTP response |
+| --- | --- |
+| `Validation` | `400 Bad Request` |
+| `Unauthorized` | `401 Unauthorized` |
+| `Forbidden` | `403 Forbidden` |
+| `NotFound` | `404 Not Found` |
+| `Conflict` | `409 Conflict` |
+| `Unknown` | `500 Problem` |
+
+## Samples
+
+Run the C# sample:
+
+```bash
+dotnet run --project samples/Kawa.Sample.CSharp
+```
+
+Run the mixed C# host + F# use case sample:
+
+```bash
+dotnet run --project samples/Kawa.Sample.Mixed
+```
+
+Run the mixed C# host + VB.NET use case sample:
+
+```bash
+dotnet run --project samples/Kawa.Sample.VB
+```
+
+All samples expose `POST /users`.
+
+## Development
+
+Restore, build, and test:
+
+```bash
+dotnet restore Kawa.sln
+dotnet build Kawa.sln --no-restore
+dotnet test Kawa.sln --no-restore --no-build
+```
+
+Run tests with coverage:
+
+```bash
+dotnet test Kawa.sln \
+  --no-restore \
+  --no-build \
+  --collect:"XPlat Code Coverage" \
+  --results-directory TestResults \
+  -- \
+  DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=cobertura
+```
+
+The CI pipeline audits NuGet packages during restore and uploads coverage to Codecov using the repository secret `CODECOV_TOKEN`. Project and patch coverage are configured to target 100%.
 
 To create local NuGet packages:
 
@@ -25,10 +172,22 @@ To publish the generated packages to NuGet.org:
 NUGET_API_KEY=... bash eng/push-nuget.sh
 ```
 
+NuGet packages and GitHub Releases are published by GitHub Actions when a tag
+in `vX.Y.Z` format is pushed, for example:
+
+```bash
+git tag v0.1.1
+git push origin v0.1.1
+```
+
+The release workflow uses the repository secret `NUGET_API_KEY`.
+
 See:
 
 - [Design Principles](docs/design-principles.md)
+- [Rails-like Convention Proposal](docs/rails-like-conventions.md)
 - [設計思想メモ 日本語版](docs/design-principles.ja.md)
+- [Rails-like Convention Proposal 日本語版](docs/rails-like-conventions.ja.md)
 
 ## License
 

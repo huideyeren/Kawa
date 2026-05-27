@@ -4,6 +4,15 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CONFIGURATION="${CONFIGURATION:-Release}"
 OUTPUT_DIR="${OUTPUT_DIR:-$ROOT_DIR/artifacts/packages}"
+PACKAGE_VERSION="${PACKAGE_VERSION:-}"
+
+msbuild_properties=(
+  "-p:ContinuousIntegrationBuild=true"
+)
+
+if [[ -n "$PACKAGE_VERSION" ]]; then
+  msbuild_properties+=("-p:Version=$PACKAGE_VERSION")
+fi
 
 mkdir -p "$OUTPUT_DIR"
 find "$OUTPUT_DIR" -maxdepth 1 -type f \( -name 'Kawa.*.nupkg' -o -name 'Kawa.*.snupkg' \) -delete
@@ -24,6 +33,7 @@ for project in "${projects[@]}" "${test_projects[@]}"; do
   dotnet build "$ROOT_DIR/$project" \
     --no-restore \
     --configuration "$CONFIGURATION" \
+    "${msbuild_properties[@]}" \
     --disable-build-servers \
     -maxcpucount:1
 done
@@ -43,6 +53,7 @@ for project in "${projects[@]}"; do
     --no-build \
     --configuration "$CONFIGURATION" \
     --output "$OUTPUT_DIR" \
+    "${msbuild_properties[@]}" \
     --disable-build-servers \
     -maxcpucount:1
 done

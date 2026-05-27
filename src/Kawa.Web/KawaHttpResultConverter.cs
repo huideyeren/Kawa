@@ -8,6 +8,10 @@ namespace Kawa.Web;
 /// </summary>
 public static class KawaHttpResultConverter
 {
+    private static readonly KawaHttpTransportMapper DefaultMapper = new(
+        new KawaHttpSuccessMapper(),
+        new KawaHttpErrorMapper());
+
     /// <summary>
     /// Converts a Kawa result to an ASP.NET Core HTTP result.
     /// </summary>
@@ -16,24 +20,6 @@ public static class KawaHttpResultConverter
     /// <returns>An HTTP result for the supplied Kawa result.</returns>
     public static IResult ToIResult<TResponse>(KawaResult<TResponse> result)
     {
-        ArgumentNullException.ThrowIfNull(result);
-
-        if (result.IsSuccess)
-        {
-            return Results.Ok(result.Value);
-        }
-
-        var error = result.Error!;
-
-        return error.Kind switch
-        {
-            KawaErrorKind.Validation => Results.BadRequest(error),
-            KawaErrorKind.Unauthorized => Results.StatusCode(StatusCodes.Status401Unauthorized),
-            KawaErrorKind.Forbidden => Results.StatusCode(StatusCodes.Status403Forbidden),
-            KawaErrorKind.NotFound => Results.NotFound(error),
-            KawaErrorKind.Conflict => Results.Conflict(error),
-            KawaErrorKind.Unknown => Results.Problem(error.Message),
-            _ => Results.Problem(error.Message),
-        };
+        return DefaultMapper.Map(result);
     }
 }
