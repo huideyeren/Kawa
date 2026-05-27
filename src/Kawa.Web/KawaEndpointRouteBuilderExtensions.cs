@@ -96,7 +96,7 @@ public static class KawaEndpointRouteBuilderExtensions
             .Produces(StatusCodes.Status403Forbidden)
             .Produces<KawaError>(StatusCodes.Status404NotFound, "application/json")
             .Produces<KawaError>(StatusCodes.Status409Conflict, "application/json")
-            .Produces(StatusCodes.Status500InternalServerError);
+            .Produces<ProblemDetails>(StatusCodes.Status500InternalServerError, "application/problem+json");
     }
 
     private static RouteHandlerBuilder WithKawaUseCaseMetadata(

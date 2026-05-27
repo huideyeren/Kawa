@@ -937,7 +937,7 @@ src/
 
 samples/
   Kawa.Sample.CSharp/
-  Kawa.Sample.Mixed/
+  Kawa.Sample.FSharp/
 
 tests/
   Kawa.Abstractions.Tests/
@@ -957,7 +957,7 @@ flowchart TD
     Src --> FS[Kawa.FSharp]
 
     Samples --> CS[Kawa.Sample.CSharp]
-    Samples --> Mixed[Kawa.Sample.Mixed]
+    Samples --> FSharpSample[Kawa.Sample.FSharp]
 
     Tests --> AbsT[Kawa.Abstractions.Tests]
     Tests --> CoreT[Kawa.Core.Tests]

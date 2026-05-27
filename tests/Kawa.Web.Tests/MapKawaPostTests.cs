@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Metadata;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
@@ -104,7 +105,8 @@ public sealed class MapKawaPostTests
                 && metadata.Type == typeof(KawaError));
         Assert.Contains(
             producesMetadata,
-            metadata => metadata.StatusCode == StatusCodes.Status500InternalServerError);
+            metadata => metadata.StatusCode == StatusCodes.Status500InternalServerError
+                && metadata.Type == typeof(ProblemDetails));
     }
 
     /// <summary>
@@ -169,6 +171,45 @@ public sealed class MapKawaPostTests
         Assert.Equal(
             "The failure has no more specific application category.",
             responses.GetProperty("500").GetProperty("description").GetString());
+        Assert.True(
+            responses.GetProperty("500")
+                .GetProperty("content")
+                .TryGetProperty("application/problem+json", out _));
+    }
+
+    /// <summary>
+    /// Verifies that Kawa web conventions expose a contract-first API catalog.
+    /// </summary>
+    /// <returns>A task that represents the asynchronous test operation.</returns>
+    [Fact]
+    public async Task ApiCatalog_ExposesMappedUseCaseContracts()
+    {
+        using var host = await StartOpenApiHostAsync();
+        using var client = host.GetTestClient();
+
+        using var document = await JsonDocument.ParseAsync(
+            await client.GetStreamAsync(KawaOpenApiDefaults.ApiCatalogPattern));
+
+        var useCase = Assert.Single(document.RootElement.GetProperty("useCases").EnumerateArray());
+        var request = useCase.GetProperty("request");
+        var response = useCase.GetProperty("response");
+        var errors = useCase.GetProperty("errorResponses");
+
+        Assert.Equal("users.create", useCase.GetProperty("name").GetString());
+        Assert.Equal("Create user", useCase.GetProperty("summary").GetString());
+        Assert.Equal("Creates a user account.", useCase.GetProperty("description").GetString());
+        Assert.Equal("v1", useCase.GetProperty("version").GetString());
+        Assert.Contains(
+            useCase.GetProperty("tags").EnumerateArray(),
+            tag => tag.GetString() == "Users");
+        Assert.Equal(nameof(ConventionalCreateUser.Request), request.GetProperty("name").GetString());
+        Assert.Equal(typeof(ConventionalCreateUser.Request).FullName, request.GetProperty("fullName").GetString());
+        Assert.Equal(nameof(ConventionalCreateUser.Response), response.GetProperty("name").GetString());
+        Assert.Equal(typeof(ConventionalCreateUser.Response).FullName, response.GetProperty("fullName").GetString());
+        Assert.Contains(
+            errors.EnumerateArray(),
+            error => error.GetProperty("kind").GetString() == nameof(KawaErrorKind.Validation)
+                && error.GetProperty("description").GetString() == "The supplied user fields are invalid.");
     }
 
     /// <summary>
@@ -257,6 +298,7 @@ public sealed class MapKawaPostTests
                     app.UseEndpoints(endpoints =>
                     {
                         endpoints.MapKawaPost<ConventionalCreateUser>("/users");
+                        endpoints.MapKawaApiCatalog();
                         endpoints.MapKawaOpenApi();
                     });
                 });

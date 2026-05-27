@@ -1,5 +1,5 @@
 using Kawa.Abstractions;
-using Kawa.Sample.Mixed.UseCases;
+using Kawa.Sample.FSharp.UseCases;
 using Kawa.Web;
 
 var builder = WebApplication.CreateBuilder(args);

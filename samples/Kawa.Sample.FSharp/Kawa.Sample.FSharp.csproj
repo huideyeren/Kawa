@@ -10,7 +10,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Kawa.Web\Kawa.Web.csproj" />
-    <ProjectReference Include="..\Kawa.Sample.Mixed.UseCases\Kawa.Sample.Mixed.UseCases.fsproj" />
+    <ProjectReference Include="..\Kawa.Sample.FSharp.UseCases\Kawa.Sample.FSharp.UseCases.fsproj" />
   </ItemGroup>
 
 </Project>

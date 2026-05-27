@@ -72,6 +72,7 @@ builder.Services
 var app = builder.Build();
 
 app.MapKawaPost<CreateUser>("/users");
+app.MapKawaApiCatalog();
 app.MapKawaOpenApi();
 
 if (app.Environment.IsDevelopment())
@@ -83,7 +84,7 @@ if (app.Environment.IsDevelopment())
 app.Run();
 ```
 
-Kawa.Web exposes the same contracts through OpenAPI at `/openapi/v1.json`. Swagger UI is available at `/swagger` and ReDoc is available at `/redoc` when the corresponding Kawa UI middleware is mapped. The convention is that Kawa request/response contracts are the source of the OpenAPI schema.
+Kawa.Web exposes the same contracts through the Kawa API catalog at `/kawa/catalog.json` and OpenAPI at `/openapi/v1.json`. Swagger UI is available at `/swagger` and ReDoc is available at `/redoc` when the corresponding Kawa UI middleware is mapped. The convention is that Kawa request/response contracts are the source of the API catalog and OpenAPI schema.
 
 The documentation UIs are middleware, so map them only where they should be public. The recommended default is development-only; exposing `/swagger` or `/redoc` in production should be an explicit application decision.
 
@@ -122,10 +123,10 @@ Run the C# sample:
 dotnet run --project samples/Kawa.Sample.CSharp
 ```
 
-Run the mixed C# host + F# use case sample:
+Run the C# host + F# use case sample:
 
 ```bash
-dotnet run --project samples/Kawa.Sample.Mixed
+dotnet run --project samples/Kawa.Sample.FSharp
 ```
 
 Run the mixed C# host + VB.NET use case sample:
@@ -160,6 +161,8 @@ dotnet test Kawa.sln \
 
 The CI pipeline audits NuGet packages during restore and uploads coverage to Codecov using the repository secret `CODECOV_TOKEN`. Project and patch coverage are configured to target 100%.
 
+Update both [Changelog](CHANGELOG.md) and [変更履歴 日本語版](CHANGELOG.ja.md) whenever a change is added. During development, record changes under the current `Unreleased` version section. Before releasing, replace `Unreleased` with the release date for that version.
+
 To create local NuGet packages:
 
 ```bash
@@ -181,9 +184,12 @@ git push origin v0.1.1
 ```
 
 The release workflow uses the repository secret `NUGET_API_KEY`.
+GitHub Release notes are generated from the matching version section in the English and Japanese changelogs.
 
 See:
 
+- [Changelog](CHANGELOG.md)
+- [変更履歴 日本語版](CHANGELOG.ja.md)
 - [Design Principles](docs/design-principles.md)
 - [Rails-like Convention Proposal](docs/rails-like-conventions.md)
 - [設計思想メモ 日本語版](docs/design-principles.ja.md)

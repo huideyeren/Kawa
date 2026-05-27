@@ -75,15 +75,62 @@ jobs:
           NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
         run: bash eng/push-nuget.sh
 
+      - name: Prepare release notes
+        env:
+          VERSION: ${{ steps.release.outputs.version }}
+        run: |
+          extract_changelog_section() {
+            local file="$1"
+            local version="$2"
+
+            awk -v version="$version" '
+              $0 ~ "^## \\[" version "\\]" {
+                found = 1
+                print
+                next
+              }
+              found && /^## \[/ {
+                exit
+              }
+              found {
+                print
+              }
+            ' "$file"
+          }
+
+          extract_changelog_section CHANGELOG.md "$VERSION" > release-notes.en.md
+          extract_changelog_section CHANGELOG.ja.md "$VERSION" > release-notes.ja.md
+
+          if [ ! -s release-notes.en.md ]; then
+            echo "CHANGELOG.md does not contain a section for $VERSION." >&2
+            exit 1
+          fi
+
+          if [ ! -s release-notes.ja.md ]; then
+            echo "CHANGELOG.ja.md does not contain a section for $VERSION." >&2
+            exit 1
+          fi
+
+          if grep -q "Unreleased\\|未リリース" release-notes.en.md release-notes.ja.md; then
+            echo "Release changelog sections must use the release date, not Unreleased." >&2
+            exit 1
+          fi
+
+          {
+            cat release-notes.en.md
+            echo
+            echo "## Japanese"
+            cat release-notes.ja.md
+          } > release-notes.md
+
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ steps.release.outputs.tag }}
-          VERSION: ${{ steps.release.outputs.version }}
         run: |
           gh release create "$TAG" \
             artifacts/packages/*.nupkg \
             artifacts/packages/*.snupkg \
             --title "$TAG" \
-            --notes "NuGet packages for Kawa $VERSION." \
+            --notes-file release-notes.md \
             --verify-tag

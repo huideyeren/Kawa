@@ -26,6 +26,16 @@ public static class KawaOpenApiDefaults
     public const string DisplayName = "Kawa v1";
 
     /// <summary>
+    /// Gets the default Kawa API catalog route pattern.
+    /// </summary>
+    public const string ApiCatalogPattern = "/kawa/catalog.json";
+
+    /// <summary>
+    /// Gets the default Kawa API catalog endpoint name.
+    /// </summary>
+    public const string ApiCatalogEndpointName = "kawa.catalog";
+
+    /// <summary>
     /// Gets the default Swagger UI route prefix.
     /// </summary>
     public const string SwaggerRoutePrefix = "swagger";
