@@ -63,6 +63,7 @@ public sealed class LanguageBoundaryTests
 
     private static async Task<IHost> StartHostAsync<TRequest, TResponse>(
         IUseCase<TRequest, TResponse> useCase)
+        where TRequest : notnull
     {
         return await new HostBuilder()
             .ConfigureWebHost(webHost =>

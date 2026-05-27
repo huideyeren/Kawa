@@ -1,13 +1,21 @@
-using Kawa.Abstractions;
 using Kawa.Web;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddKawa();
-builder.Services.AddSingleton<IUseCase<CreateUserRequest, CreateUserResponse>, CreateUserUseCase>();
+builder.Services
+    .AddKawa()
+    .AddKawaUseCasesFromAssemblies(typeof(CreateUser).Assembly)
+    .AddKawaWeb();
 
 var app = builder.Build();
 
-app.MapKawaPost<CreateUserRequest, CreateUserResponse>("/users");
+app.MapKawaPost<CreateUser>("/users");
+app.MapKawaOpenApi();
+
+if (app.Environment.IsDevelopment())
+{
+    app.MapKawaSwagger();
+    app.MapKawaReDoc();
+}
 
 app.Run();
