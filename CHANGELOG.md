@@ -23,6 +23,7 @@ All notable changes to Kawa are documented here.
 ### Infrastructure
 
 - Fixed Dependabot PR coverage uploads by ensuring Codecov receives the correct token.
+- Added direct API catalog conversion tests to keep coverage checks aligned with the 0.3.0 catalog work.
 
 ## [0.2.1] - 2026-05-27
 
