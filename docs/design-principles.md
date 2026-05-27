@@ -365,6 +365,8 @@ This layer passes HTTP requests into UseCases and converts UseCase results into 
 - Conversion from `KawaResult<T>` to `IResult`
 - `AddKawa()` dependency injection registration
 - OpenAPI metadata hooks
+- Contract-first OpenAPI document generation
+- Default Swagger UI / ReDoc setup
 - Minimal API endpoint registration
 
 #### Dependency rules
@@ -373,6 +375,45 @@ This layer passes HTTP requests into UseCases and converts UseCase results into 
 - May depend on Kawa.Abstractions
 - May depend on Kawa.Core
 - Must not contain domain logic
+
+---
+
+### 3.3.1 OpenAPI / Swagger / ReDoc integration
+
+Kawa.Web treats OpenAPI as contract-first.
+
+The source of an OpenAPI document is not the endpoint implementation. It is Kawa's `Request` / `Response` contracts.
+Mapping APIs such as `MapKawaPost<TUseCase>` infer request schemas, response schemas, and error schemas from the `IUseCase<TRequest,TResponse>` contract implemented by the UseCase, then attach that information as Minimal API OpenAPI metadata.
+
+When Kawa.Web is set up, developers should be able to inspect the API contract without extra ceremony.
+
+Default policy:
+
+- `AddKawa()` registers Kawa's OpenAPI metadata provider
+- `AddKawaWeb()` or a future Web setup API registers ASP.NET Core OpenAPI services
+- `MapKawaPost<TUseCase>` reflects `TRequest` / `TResponse` into the OpenAPI schema
+- Swagger UI and ReDoc are mapped by the application in development
+- UI exposure in production is explicit opt-in
+- `/openapi/{documentName}.json` is the default OpenAPI document path candidate
+- `/swagger` and `/redoc` are the default UI path candidates
+
+OpenAPI responsibility split:
+
+```mermaid
+flowchart LR
+    Contract[Contracts<br/>Request / Response] --> Metadata[Kawa OpenAPI Metadata]
+    UseCase[IUseCase&lt;TRequest,TResponse&gt;] --> Metadata
+    Endpoint[MapKawaPost&lt;TUseCase&gt;] --> Metadata
+    Metadata --> Document[OpenAPI document]
+    Document --> Swagger[Swagger UI]
+    Document --> ReDoc[ReDoc]
+```
+
+Endpoints describe routes and transport binding, but they are not the center of the API schema.
+The API schema starts from Contracts; Endpoints declare which URL / method exposes those Contracts.
+
+Therefore, creating separate DTOs such as `CreateUserHttpRequest` or `CreateUserSwaggerDto` solely for OpenAPI should be avoided by default.
+When a transport-specific input shape is necessary, it should still be converted into Kawa `Request` / `Response` contracts so the OpenAPI contract remains centered on Kawa contracts.
 
 ---
 
@@ -553,6 +594,38 @@ public interface IUseCase<TRequest, TResponse>
 ```
 
 This allows the same interface to be implemented from C#, F#, VB.NET, and other CLR languages.
+
+In Kawa, the unit of language mixing is the project / assembly, not the source file.
+
+In practical .NET terms, one project usually means one language compiler. Kawa should not make mixing C#, F#, and VB.NET source files inside one `.csproj`, `.fsproj`, or `.vbproj` the standard convention.
+Instead, one solution / application may contain separate C#, F#, and VB.NET projects that all reference the same C# friendly contract boundary.
+
+The recommended structure is:
+
+```text
+MyApp.Contracts        # C#. Request / Response / Error contracts
+MyApp.UseCases.CSharp  # C# UseCase implementation
+MyApp.UseCases.FSharp  # F# UseCases / domain rules
+MyApp.UseCases.VB      # VB.NET UseCase implementation
+MyApp.Web              # ASP.NET Core / Kawa.Web endpoints
+MyApp.Cli              # optional CLI adapter
+MyApp.Worker           # optional Worker adapter
+```
+
+Dependencies should stay contract-first.
+
+```mermaid
+flowchart BT
+    CSharpUseCases[MyApp.UseCases.CSharp] --> Contracts[MyApp.Contracts<br/>C# boundary]
+    FSharpUseCases[MyApp.UseCases.FSharp] --> Contracts
+    VBUseCases[MyApp.UseCases.VB] --> Contracts
+    Web[MyApp.Web] --> Contracts
+    Web --> CSharpUseCases
+    Web --> FSharpUseCases
+    Web --> VBUseCases
+```
+
+With this structure, Web / RPC / CLI / Worker adapters do not need to know which language implements a UseCase. They only see `IUseCase<TRequest,TResponse>` and Kawa `Request` / `Response` contracts.
 
 ---
 
@@ -1182,6 +1255,10 @@ F# is especially useful in Kawa for:
 Kawa does not require everything to be written in F#.
 
 C# is strong at connecting applications to the real runtime environment: ASP.NET Core, Minimal API, DI, DTOs, OpenAPI, EF Core, and infrastructure.
+
+However, Kawa's recommended language mixing model is not putting multiple languages' source files into one project.
+C#, F#, and VB.NET should live in separate `.csproj`, `.fsproj`, and `.vbproj` projects, then join in the same solution / application.
+The boundary `Contracts` project should preferably be C#, and every UseCase project and Transport project should reference those C# contracts.
 
 F# is strong at expressing business rules themselves without muddying the logic.
 Developers who are productive in F# may write broader domain implementations in F#, as long as those implementations do not cross domain boundaries.
