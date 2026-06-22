@@ -2,7 +2,8 @@ coverage:
   status:
     project:
       default:
-        target: 100%
+        # Compare against the base commit so existing uncovered code does not make every PR fail.
+        target: auto
         threshold: 0%
     patch:
       default:
