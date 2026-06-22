@@ -2,6 +2,15 @@
 
 Kawa の主な変更点をここに記録します。
 
+## [0.3.1] - 未リリース
+
+### 修正
+
+- ネストした `Request` / `Response` contract type が同じ OpenAPI schema reference を共有しないようにし、
+  生成クライアントが各 use case に対応する schema を受け取れるようにしました。
+- contract assembly が XML documentation file を生成している場合に、contract type と property の
+  XML documentation summary を OpenAPI schema description に反映するようにしました。
+
 ## [0.3.0] - 2026-05-28
 
 ### 変更
@@ -54,6 +63,7 @@ Kawa の主な変更点をここに記録します。
 - VB.NET boundary sample と language boundary test を追加しました。
 - NuGet release workflow と local packaging script を追加しました。
 
+[0.3.1]: https://github.com/huideyeren/Kawa/compare/v0.3.0...HEAD
 [0.3.0]: https://github.com/huideyeren/Kawa/compare/v0.2.1...v0.3.0
 [0.2.1]: https://github.com/huideyeren/Kawa/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/huideyeren/Kawa/compare/v0.1.1...v0.2.0
