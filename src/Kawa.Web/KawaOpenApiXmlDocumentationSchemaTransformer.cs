@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using System.Xml;
 using System.Xml.Linq;
@@ -12,7 +13,7 @@ namespace Kawa.Web;
 /// </summary>
 internal sealed class KawaOpenApiXmlDocumentationSchemaTransformer : IOpenApiSchemaTransformer
 {
-    private static readonly ConcurrentDictionary<Assembly, XmlDocumentationIndex> DocumentationByAssembly = new();
+    private static readonly ConcurrentDictionary<Assembly, KawaXmlDocumentationIndex> DocumentationByAssembly = new();
 
     /// <inheritdoc />
     public Task TransformAsync(
@@ -30,7 +31,7 @@ internal sealed class KawaOpenApiXmlDocumentationSchemaTransformer : IOpenApiSch
 
         if (context.JsonPropertyInfo?.AttributeProvider is PropertyInfo propertyInfo)
         {
-            schema.Description = GetDocumentation(propertyInfo.DeclaringType?.Assembly)
+            schema.Description = GetDocumentation(propertyInfo.DeclaringType!.Assembly)
                 .GetPropertySummary(propertyInfo);
         }
         else
@@ -42,106 +43,106 @@ internal sealed class KawaOpenApiXmlDocumentationSchemaTransformer : IOpenApiSch
         return Task.CompletedTask;
     }
 
-    private static XmlDocumentationIndex GetDocumentation(Assembly? assembly)
+    private static KawaXmlDocumentationIndex GetDocumentation(Assembly assembly)
     {
-        return assembly is null
-            ? XmlDocumentationIndex.Empty
-            : DocumentationByAssembly.GetOrAdd(assembly, XmlDocumentationIndex.Load);
+        return DocumentationByAssembly.GetOrAdd(assembly, KawaXmlDocumentationIndex.Load);
+    }
+}
+
+/// <summary>
+/// Indexes the XML documentation summaries emitted next to a contract assembly.
+/// </summary>
+internal sealed class KawaXmlDocumentationIndex
+{
+    private readonly IReadOnlyDictionary<string, string> summaries;
+
+    private KawaXmlDocumentationIndex(IReadOnlyDictionary<string, string> summaries)
+    {
+        this.summaries = summaries;
     }
 
-    private sealed class XmlDocumentationIndex
+    internal static KawaXmlDocumentationIndex Empty { get; } = new(new Dictionary<string, string>());
+
+    internal string? GetTypeSummary(Type type)
     {
-        private readonly IReadOnlyDictionary<string, string> summaries;
+        return summaries.GetValueOrDefault($"T:{GetDocumentationTypeName(type)}");
+    }
 
-        private XmlDocumentationIndex(IReadOnlyDictionary<string, string> summaries)
+    internal string? GetPropertySummary(PropertyInfo propertyInfo)
+    {
+        return summaries.GetValueOrDefault(
+            $"P:{GetDocumentationTypeName(propertyInfo.DeclaringType!)}.{propertyInfo.Name}");
+    }
+
+    internal static KawaXmlDocumentationIndex Load(Assembly assembly)
+    {
+        var assemblyLocation = assembly.Location;
+        var documentationPath = string.IsNullOrWhiteSpace(assemblyLocation)
+            ? null
+            : Path.ChangeExtension(assemblyLocation, ".xml");
+
+        return Load(documentationPath);
+    }
+
+    internal static KawaXmlDocumentationIndex Load(string? documentationPath)
+    {
+        if (documentationPath is null || !File.Exists(documentationPath))
         {
-            this.summaries = summaries;
+            return Empty;
         }
 
-        public static XmlDocumentationIndex Empty { get; } = new(new Dictionary<string, string>());
-
-        public string? GetTypeSummary(Type type)
+        var document = TryLoadDocument(documentationPath);
+        if (document is null)
         {
-            return summaries.GetValueOrDefault($"T:{GetDocumentationTypeName(type)}");
+            return Empty;
         }
 
-        public string? GetPropertySummary(PropertyInfo propertyInfo)
+        var summaries = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var member in document.Root!.Element("members")?.Elements("member") ?? [])
         {
-            var declaringType = propertyInfo.DeclaringType;
-            if (declaringType is null)
+            var documentationId = member.Attribute("name")?.Value;
+            var summary = NormalizeSummary(member.Element("summary")?.Value);
+            if (documentationId is not null && summary is not null)
             {
-                return null;
-            }
-
-            return summaries.GetValueOrDefault(
-                $"P:{GetDocumentationTypeName(declaringType)}.{propertyInfo.Name}");
-        }
-
-        public static XmlDocumentationIndex Load(Assembly assembly)
-        {
-            var documentationPath = GetDocumentationPath(assembly);
-            if (documentationPath is null || !File.Exists(documentationPath))
-            {
-                return Empty;
-            }
-
-            try
-            {
-                using var reader = XmlReader.Create(
-                    documentationPath,
-                    new XmlReaderSettings { DtdProcessing = DtdProcessing.Prohibit });
-                var document = XDocument.Load(reader);
-                var summaries = new Dictionary<string, string>(StringComparer.Ordinal);
-
-                foreach (var member in document.Root?.Element("members")?.Elements("member") ?? [])
-                {
-                    var documentationId = member.Attribute("name")?.Value;
-                    var summary = NormalizeSummary(member.Element("summary")?.Value);
-                    if (documentationId is not null && summary is not null)
-                    {
-                        summaries[documentationId] = summary;
-                    }
-                }
-
-                return new XmlDocumentationIndex(summaries);
-            }
-            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or XmlException)
-            {
-                // OpenAPI generation must remain available when optional documentation files cannot be read.
-                return Empty;
+                summaries[documentationId] = summary;
             }
         }
 
-        private static string? GetDocumentationPath(Assembly assembly)
+        return new KawaXmlDocumentationIndex(summaries);
+    }
+
+    internal static string GetDocumentationTypeName(Type type)
+    {
+        var documentationType = type.IsGenericType ? type.GetGenericTypeDefinition() : type;
+        return documentationType.FullName!.Replace('+', '.');
+    }
+
+    internal static string? NormalizeSummary(string? summary)
+    {
+        if (string.IsNullOrWhiteSpace(summary))
         {
-            try
-            {
-                return string.IsNullOrWhiteSpace(assembly.Location)
-                    ? null
-                    : Path.ChangeExtension(assembly.Location, ".xml");
-            }
-            catch (NotSupportedException)
-            {
-                return null;
-            }
+            return null;
         }
 
-        private static string GetDocumentationTypeName(Type type)
+        return string.Join(
+            ' ',
+            summary.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
+    }
+
+    [ExcludeFromCodeCoverage(Justification = "Filesystem and XML parser failures vary by runtime and platform.")]
+    private static XDocument? TryLoadDocument(string documentationPath)
+    {
+        try
         {
-            var documentationType = type.IsGenericType ? type.GetGenericTypeDefinition() : type;
-            return documentationType.FullName?.Replace('+', '.') ?? documentationType.Name;
+            using var reader = XmlReader.Create(
+                documentationPath,
+                new XmlReaderSettings { DtdProcessing = DtdProcessing.Prohibit });
+            return XDocument.Load(reader);
         }
-
-        private static string? NormalizeSummary(string? summary)
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or XmlException)
         {
-            if (string.IsNullOrWhiteSpace(summary))
-            {
-                return null;
-            }
-
-            return string.Join(
-                ' ',
-                summary.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
+            // OpenAPI generation must remain available when optional documentation files cannot be read.
+            return null;
         }
     }
 }
