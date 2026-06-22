@@ -215,6 +215,18 @@ public sealed class MapKawaPostTests
         Assert.True(GetReferencedSchema(schemas, createResponseReference).GetProperty("properties").TryGetProperty("message", out _));
         Assert.True(GetReferencedSchema(schemas, listRequestReference).GetProperty("properties").TryGetProperty("query", out _));
         Assert.True(GetReferencedSchema(schemas, listResponseReference).GetProperty("properties").TryGetProperty("users", out _));
+
+        var listRequestSchema = GetReferencedSchema(schemas, listRequestReference);
+        Assert.Equal("Describes the user search.", listRequestSchema.GetProperty("description").GetString());
+        Assert.Equal(
+            "Limits users by a partial name.",
+            listRequestSchema.GetProperty("properties").GetProperty("query").GetProperty("description").GetString());
+
+        var documentedUserSchema = schemas.GetProperty(GetExpectedSchemaId(typeof(DocumentedUser)));
+        Assert.Equal("Represents a user returned by the API.", documentedUserSchema.GetProperty("description").GetString());
+        Assert.Equal(
+            "Gets the stable user identifier.",
+            documentedUserSchema.GetProperty("properties").GetProperty("id").GetProperty("description").GetString());
     }
 
     /// <summary>
@@ -403,7 +415,12 @@ public sealed class MapKawaPostTests
 
     private static string GetExpectedSchemaReference(Type type)
     {
-        return $"#/components/schemas/{type.FullName!.Replace('+', '.')}";
+        return $"#/components/schemas/{GetExpectedSchemaId(type)}";
+    }
+
+    private static string GetExpectedSchemaId(Type type)
+    {
+        return type.FullName!.Replace('+', '.');
     }
 
     private static JsonElement GetReferencedSchema(JsonElement schemas, string reference)
@@ -466,9 +483,17 @@ public sealed class MapKawaPostTests
     private sealed class ConventionalListUsers
         : IUseCase<ConventionalListUsers.Request, ConventionalListUsers.Response>
     {
+        /// <summary>
+        /// Describes the user search.
+        /// </summary>
+        /// <param name="Query">Limits users by a partial name.</param>
         public sealed record Request(string? Query = null);
 
-        public sealed record Response(string[] Users);
+        /// <summary>
+        /// Contains the users matching the search.
+        /// </summary>
+        /// <param name="Users">The matching users.</param>
+        public sealed record Response(DocumentedUser[] Users);
 
         public Task<KawaResult<Response>> ExecuteAsync(
             Request request,
@@ -476,5 +501,16 @@ public sealed class MapKawaPostTests
         {
             return Task.FromResult(KawaResult<Response>.Success(new Response([])));
         }
+    }
+
+    /// <summary>
+    /// Represents a user returned by the API.
+    /// </summary>
+    private sealed class DocumentedUser
+    {
+        /// <summary>
+        /// Gets the stable user identifier.
+        /// </summary>
+        public required string Id { get; init; }
     }
 }

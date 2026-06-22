@@ -86,6 +86,14 @@ app.Run();
 
 Kawa.Web exposes the same contracts through the Kawa API catalog at `/kawa/catalog.json` and OpenAPI at `/openapi/v1.json`. Swagger UI is available at `/swagger` and ReDoc is available at `/redoc` when the corresponding Kawa UI middleware is mapped. The convention is that Kawa request/response contracts are the source of the API catalog and OpenAPI schema.
 
+When a contract assembly emits an XML documentation file next to its assembly, Kawa adds type and
+property summaries to the corresponding OpenAPI schema descriptions. Enable this in each project that
+defines documented contracts:
+
+```xml
+<GenerateDocumentationFile>true</GenerateDocumentationFile>
+```
+
 The documentation UIs are middleware, so map them only where they should be public. The recommended default is development-only; exposing `/swagger` or `/redoc` in production should be an explicit application decision.
 
 Use case metadata and error response attributes are transport-independent. Kawa.Web maps them to OpenAPI, and future RPC / CLI / Worker adapters can use the same API catalog.

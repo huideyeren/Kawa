@@ -8,6 +8,8 @@ All notable changes to Kawa are documented here.
 
 - Prevented nested `Request` and `Response` contract types from sharing OpenAPI schema references,
   so generated clients receive the schema mapped to each use case.
+- Added contract type and property XML documentation summaries to OpenAPI schema descriptions when
+  the contract assembly emits an XML documentation file.
 
 ## [0.3.0] - 2026-05-28
 

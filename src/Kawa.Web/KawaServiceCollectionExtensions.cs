@@ -44,6 +44,7 @@ public static class KawaServiceCollectionExtensions
         {
             options.CreateSchemaReferenceId = CreateSchemaReferenceId;
             options.AddOperationTransformer(KawaOpenApiOperationTransformer.TransformAsync);
+            options.AddSchemaTransformer<KawaOpenApiXmlDocumentationSchemaTransformer>();
         });
 
         return services;

@@ -8,6 +8,8 @@ Kawa の主な変更点をここに記録します。
 
 - ネストした `Request` / `Response` contract type が同じ OpenAPI schema reference を共有しないようにし、
   生成クライアントが各 use case に対応する schema を受け取れるようにしました。
+- contract assembly が XML documentation file を生成している場合に、contract type と property の
+  XML documentation summary を OpenAPI schema description に反映するようにしました。
 
 ## [0.3.0] - 2026-05-28
 
