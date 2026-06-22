@@ -2,6 +2,13 @@
 
 All notable changes to Kawa are documented here.
 
+## [0.3.1] - Unreleased
+
+### Fixed
+
+- Prevented nested `Request` and `Response` contract types from sharing OpenAPI schema references,
+  so generated clients receive the schema mapped to each use case.
+
 ## [0.3.0] - 2026-05-28
 
 ### Changed
@@ -54,6 +61,7 @@ All notable changes to Kawa are documented here.
 - Added VB.NET boundary sample and language boundary tests.
 - Added NuGet release workflow and local packaging script.
 
+[0.3.1]: https://github.com/huideyeren/Kawa/compare/v0.3.0...HEAD
 [0.3.0]: https://github.com/huideyeren/Kawa/compare/v0.2.1...v0.3.0
 [0.2.1]: https://github.com/huideyeren/Kawa/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/huideyeren/Kawa/compare/v0.1.1...v0.2.0

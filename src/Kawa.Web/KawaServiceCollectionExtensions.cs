@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using System.Reflection;
+using System.Text.Json.Serialization.Metadata;
 
 namespace Kawa.Web;
 
@@ -40,9 +41,27 @@ public static class KawaServiceCollectionExtensions
         ArgumentNullException.ThrowIfNull(services);
 
         services.AddOpenApi(options =>
-            options.AddOperationTransformer(KawaOpenApiOperationTransformer.TransformAsync));
+        {
+            options.CreateSchemaReferenceId = CreateSchemaReferenceId;
+            options.AddOperationTransformer(KawaOpenApiOperationTransformer.TransformAsync);
+        });
 
         return services;
+    }
+
+    private static string? CreateSchemaReferenceId(JsonTypeInfo typeInfo)
+    {
+        var type = typeInfo.Type;
+
+        // Kawa contracts commonly use nested Request and Response types. Their full names retain
+        // the declaring contract and namespace, so generated clients cannot bind an endpoint to a
+        // same-named schema from another use case. Dots also keep the resulting component IDs readable.
+        if (type is { IsNested: true, FullName: not null })
+        {
+            return type.FullName.Replace('+', '.');
+        }
+
+        return OpenApiOptions.CreateDefaultSchemaReferenceId(typeInfo);
     }
 
     /// <summary>

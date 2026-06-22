@@ -178,6 +178,46 @@ public sealed class MapKawaPostTests
     }
 
     /// <summary>
+    /// Verifies that nested contract types with common names receive distinct OpenAPI schema references.
+    /// </summary>
+    /// <returns>A task that represents the asynchronous test operation.</returns>
+    [Fact]
+    public async Task OpenApi_UsesDistinctSchemaReferencesForNestedContracts()
+    {
+        using var host = await StartCollidingContractOpenApiHostAsync();
+        using var client = host.GetTestClient();
+
+        using var document = await JsonDocument.ParseAsync(
+            await client.GetStreamAsync(KawaOpenApiDefaults.DocumentUrl));
+
+        var paths = document.RootElement.GetProperty("paths");
+        var createOperation = paths.GetProperty("/users").GetProperty("post");
+        var listOperation = paths.GetProperty("/users/list").GetProperty("post");
+        var createRequestReference = GetRequestSchemaReference(createOperation);
+        var createResponseReference = GetResponseSchemaReference(createOperation);
+        var listRequestReference = GetRequestSchemaReference(listOperation);
+        var listResponseReference = GetResponseSchemaReference(listOperation);
+
+        Assert.Equal(GetExpectedSchemaReference(typeof(ConventionalCreateUser.Request)), createRequestReference);
+        Assert.Equal(GetExpectedSchemaReference(typeof(ConventionalCreateUser.Response)), createResponseReference);
+        Assert.Equal(GetExpectedSchemaReference(typeof(ConventionalListUsers.Request)), listRequestReference);
+        Assert.Equal(GetExpectedSchemaReference(typeof(ConventionalListUsers.Response)), listResponseReference);
+        Assert.Equal(4, new[]
+        {
+            createRequestReference,
+            createResponseReference,
+            listRequestReference,
+            listResponseReference,
+        }.Distinct().Count());
+
+        var schemas = document.RootElement.GetProperty("components").GetProperty("schemas");
+        Assert.True(GetReferencedSchema(schemas, createRequestReference).GetProperty("properties").TryGetProperty("name", out _));
+        Assert.True(GetReferencedSchema(schemas, createResponseReference).GetProperty("properties").TryGetProperty("message", out _));
+        Assert.True(GetReferencedSchema(schemas, listRequestReference).GetProperty("properties").TryGetProperty("query", out _));
+        Assert.True(GetReferencedSchema(schemas, listResponseReference).GetProperty("properties").TryGetProperty("users", out _));
+    }
+
+    /// <summary>
     /// Verifies that Kawa web conventions expose a contract-first API catalog.
     /// </summary>
     /// <returns>A task that represents the asynchronous test operation.</returns>
@@ -306,6 +346,73 @@ public sealed class MapKawaPostTests
             .StartAsync();
     }
 
+    private static async Task<IHost> StartCollidingContractOpenApiHostAsync()
+    {
+        return await new HostBuilder()
+            .ConfigureWebHost(webHost =>
+            {
+                webHost.UseTestServer();
+                webHost.ConfigureServices(services =>
+                {
+                    services.AddRouting();
+                    services.AddKawa();
+                    services.AddKawaWeb();
+                    services.AddSingleton<
+                        IUseCase<ConventionalCreateUser.Request, ConventionalCreateUser.Response>,
+                        ConventionalCreateUser>();
+                    services.AddSingleton<
+                        IUseCase<ConventionalListUsers.Request, ConventionalListUsers.Response>,
+                        ConventionalListUsers>();
+                });
+                webHost.Configure(app =>
+                {
+                    app.UseRouting();
+                    app.UseEndpoints(endpoints =>
+                    {
+                        endpoints.MapKawaPost<ConventionalCreateUser>("/users");
+                        endpoints.MapKawaPost<ConventionalListUsers>("/users/list");
+                        endpoints.MapKawaOpenApi();
+                    });
+                });
+            })
+            .StartAsync();
+    }
+
+    private static string GetRequestSchemaReference(JsonElement operation)
+    {
+        return operation
+            .GetProperty("requestBody")
+            .GetProperty("content")
+            .GetProperty("application/json")
+            .GetProperty("schema")
+            .GetProperty("$ref")
+            .GetString()!;
+    }
+
+    private static string GetResponseSchemaReference(JsonElement operation)
+    {
+        return operation
+            .GetProperty("responses")
+            .GetProperty("200")
+            .GetProperty("content")
+            .GetProperty("application/json")
+            .GetProperty("schema")
+            .GetProperty("$ref")
+            .GetString()!;
+    }
+
+    private static string GetExpectedSchemaReference(Type type)
+    {
+        return $"#/components/schemas/{type.FullName!.Replace('+', '.')}";
+    }
+
+    private static JsonElement GetReferencedSchema(JsonElement schemas, string reference)
+    {
+        const string schemaReferencePrefix = "#/components/schemas/";
+        Assert.StartsWith(schemaReferencePrefix, reference);
+        return schemas.GetProperty(reference[schemaReferencePrefix.Length..]);
+    }
+
     private sealed record CreateUserRequest(string Name);
 
     private sealed record CreateUserResponse(string Message);
@@ -353,6 +460,21 @@ public sealed class MapKawaPostTests
             CancellationToken cancellationToken = default)
         {
             return Task.FromResult(KawaResult<Response>.Success(new Response($"Created {request.Name}")));
+        }
+    }
+
+    private sealed class ConventionalListUsers
+        : IUseCase<ConventionalListUsers.Request, ConventionalListUsers.Response>
+    {
+        public sealed record Request(string? Query = null);
+
+        public sealed record Response(string[] Users);
+
+        public Task<KawaResult<Response>> ExecuteAsync(
+            Request request,
+            CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(KawaResult<Response>.Success(new Response([])));
         }
     }
 }
