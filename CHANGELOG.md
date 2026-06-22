@@ -2,7 +2,7 @@
 
 All notable changes to Kawa are documented here.
 
-## [0.3.1] - 2026-06-22
+## [0.3.1] - 2026-06-23
 
 ### Fixed
 
