@@ -2,7 +2,7 @@
 
 Kawa の主な変更点をここに記録します。
 
-## [0.3.1] - 未リリース
+## [0.3.1] - 2026-06-22
 
 ### 修正
 
@@ -63,7 +63,7 @@ Kawa の主な変更点をここに記録します。
 - VB.NET boundary sample と language boundary test を追加しました。
 - NuGet release workflow と local packaging script を追加しました。
 
-[0.3.1]: https://github.com/huideyeren/Kawa/compare/v0.3.0...HEAD
+[0.3.1]: https://github.com/huideyeren/Kawa/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/huideyeren/Kawa/compare/v0.2.1...v0.3.0
 [0.2.1]: https://github.com/huideyeren/Kawa/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/huideyeren/Kawa/compare/v0.1.1...v0.2.0
