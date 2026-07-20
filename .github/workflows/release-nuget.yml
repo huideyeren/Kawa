@@ -43,7 +43,7 @@ jobs:
           ref: ${{ steps.release.outputs.tag }}
 
       - name: Setup .NET
-        uses: actions/setup-dotnet@v5
+        uses: actions/setup-dotnet@v6
         with:
           global-json-file: global.json
 
