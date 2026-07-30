@@ -1,0 +1,5 @@
+interface:
+  display_name: "Kawa App Developer"
+  short_description: "Build Kawa apps with contract-first guardrails"
+  default_prompt: "Use $kawa-app-developer to add a Kawa use case, endpoint, and tests."
+

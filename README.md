@@ -198,6 +198,13 @@ See:
 
 - [Changelog](CHANGELOG.md)
 - [変更履歴 日本語版](CHANGELOG.ja.md)
+- [Specification](docs/specification.md)
+- [仕様書 日本語版](docs/specification.ja.md)
+- [Internal Design](docs/internal-design.md)
+- [内部設計 日本語版](docs/internal-design.ja.md)
+- [Agentic Development With Kawa](docs/agent-development.md)
+- [Kawa におけるエージェント開発](docs/agent-development.ja.md)
+- [Kawa App Developer Skill](skills/kawa-app-developer/SKILL.md)
 - [Design Principles](docs/design-principles.md)
 - [Rails-like Convention Proposal](docs/rails-like-conventions.md)
 - [設計思想メモ 日本語版](docs/design-principles.ja.md)

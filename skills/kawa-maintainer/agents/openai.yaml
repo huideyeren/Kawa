@@ -1,0 +1,5 @@
+interface:
+  display_name: "Kawa Maintainer"
+  short_description: "Maintain Kawa with repo-specific guardrails"
+  default_prompt: "Use $kawa-maintainer to plan and verify a Kawa framework change."
+
