@@ -2,6 +2,26 @@
 
 All notable changes to Kawa are documented here.
 
+## [0.4.0] - 2026-07-31
+
+### Added
+
+- Added public Kawa specification documentation in English and Japanese.
+- Added internal design documentation in English and Japanese for maintainers and adapter authors.
+- Added public agent-development guidance for building Kawa applications with coding agents.
+- Added distributable Codex skills for Kawa maintainers and Kawa application developers.
+
+### Changed
+
+- Linked the new specification and agent-development documents from the README.
+- Updated GitHub Actions `actions/setup-dotnet` to v6.
+- Updated Kawa Web, Swagger UI, ReDoc, ASP.NET Core test host, and test SDK dependencies.
+
+### Security
+
+- Added an explicit `Microsoft.OpenApi` 2.7.5 dependency to resolve the NuGet audit finding for
+  `GHSA-v5pm-xwqc-g5wc`.
+
 ## [0.3.1] - 2026-06-23
 
 ### Fixed
@@ -63,6 +83,7 @@ All notable changes to Kawa are documented here.
 - Added VB.NET boundary sample and language boundary tests.
 - Added NuGet release workflow and local packaging script.
 
+[0.4.0]: https://github.com/huideyeren/Kawa/compare/v0.3.1...v0.4.0
 [0.3.1]: https://github.com/huideyeren/Kawa/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/huideyeren/Kawa/compare/v0.2.1...v0.3.0
 [0.2.1]: https://github.com/huideyeren/Kawa/compare/v0.2.0...v0.2.1

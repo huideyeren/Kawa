@@ -2,6 +2,26 @@
 
 Kawa の主な変更点をここに記録します。
 
+## [0.4.0] - 2026-07-31
+
+### 追加
+
+- Kawa の公開仕様書を英語と日本語で追加しました。
+- メンテナと adapter author 向けの内部設計ドキュメントを英語と日本語で追加しました。
+- coding agent で Kawa アプリケーションを開発するための公開 agent-development guide を追加しました。
+- Kawa メンテナ向けと Kawa アプリケーション開発者向けの配布可能な Codex skill を追加しました。
+
+### 変更
+
+- README から新しい仕様書と agent-development document へリンクしました。
+- GitHub Actions の `actions/setup-dotnet` を v6 に更新しました。
+- Kawa Web、Swagger UI、ReDoc、ASP.NET Core test host、test SDK の依存関係を更新しました。
+
+### セキュリティ
+
+- NuGet audit の `GHSA-v5pm-xwqc-g5wc` 検出に対応するため、`Microsoft.OpenApi` 2.7.5 を
+  明示的な依存関係として追加しました。
+
 ## [0.3.1] - 2026-06-23
 
 ### 修正
@@ -63,6 +83,7 @@ Kawa の主な変更点をここに記録します。
 - VB.NET boundary sample と language boundary test を追加しました。
 - NuGet release workflow と local packaging script を追加しました。
 
+[0.4.0]: https://github.com/huideyeren/Kawa/compare/v0.3.1...v0.4.0
 [0.3.1]: https://github.com/huideyeren/Kawa/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/huideyeren/Kawa/compare/v0.2.1...v0.3.0
 [0.2.1]: https://github.com/huideyeren/Kawa/compare/v0.2.0...v0.2.1
