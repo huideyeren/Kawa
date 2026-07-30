@@ -23,19 +23,18 @@ git branch --show-current
 git switch -c codex/<short-task-name>
 ```
 
-4. If the task touches current public behavior, read the user-facing specification:
+4. Read the current documentation map before deciding where to edit:
 
 ```bash
 sed -n '1,260p' docs/specification.md
-```
-
-5. If the task touches implementation boundaries, read the internal design:
-
-```bash
 sed -n '1,260p' docs/internal-design.md
 ```
 
-6. If either file is absent, fall back to `README.md`, `docs/design-principles.md`, and `docs/rails-like-conventions.md`, then consider creating or updating the missing docs as part of the work.
+5. Read this skill's `references/kawa-workflow.md` for the source map, documentation map, and change routing rules.
+
+6. If either specification file is absent, treat that as documentation drift. Fall back to `README.md`, `docs/design-principles.md`, and `docs/rails-like-conventions.md`, then include restoring the missing specification docs in the work.
+
+7. Keep the scope narrow: change framework behavior, public docs, tests, or release metadata only when the task actually requires it.
 
 ## Classify The Change
 
@@ -45,7 +44,7 @@ Before editing, classify the work:
 - Internal implementation: executor flow, mapper internals, XML documentation parsing, OpenAPI transformers, tests, packaging scripts.
 - Documentation/release: README, docs, changelogs, package metadata, GitHub release/NuGet workflow.
 
-Public contract changes need docs and changelog attention. OpenAPI/catalog changes need generated-client compatibility attention.
+Public contract changes need `docs/specification.md`, `docs/specification.ja.md`, and changelog attention. Internal boundary changes need `docs/internal-design.md` and `docs/internal-design.ja.md` attention. OpenAPI/catalog changes need generated-client compatibility attention.
 
 ## Kawa Boundaries
 
@@ -59,12 +58,14 @@ Public contract changes need docs and changelog attention. OpenAPI/catalog chang
 
 When changing OpenAPI, Swagger, ReDoc, API catalog, endpoint metadata, request/response contracts, or error response metadata:
 
-1. Inspect `src/Kawa.Web/KawaServiceCollectionExtensions.cs` before changing OpenAPI registration.
-2. Inspect `src/Kawa.Web/KawaEndpointRouteBuilderExtensions.cs` before changing endpoint metadata.
-3. Inspect `src/Kawa.Web/KawaOpenApiOperationTransformer.cs` and `src/Kawa.Web/KawaOpenApiXmlDocumentationSchemaTransformer.cs` before changing generated OpenAPI behavior.
-4. Preserve nested contract schema reference IDs based on full nested type names unless intentionally making a breaking change.
-5. Keep HTTP mapper behavior and OpenAPI metadata aligned in the same change.
-6. Add or update tests under `tests/Kawa.Web.Tests` for generated-client-facing behavior.
+1. Read `docs/specification.md` sections "API Catalog" and "OpenAPI, Swagger, and ReDoc".
+2. Read `docs/internal-design.md` sections "API Catalog Generation", "OpenAPI Integration", and "XML Documentation Schema Enrichment".
+3. Inspect `src/Kawa.Web/KawaServiceCollectionExtensions.cs` before changing OpenAPI registration.
+4. Inspect `src/Kawa.Web/KawaEndpointRouteBuilderExtensions.cs` before changing endpoint metadata.
+5. Inspect `src/Kawa.Web/KawaOpenApiOperationTransformer.cs` and `src/Kawa.Web/KawaOpenApiXmlDocumentationSchemaTransformer.cs` before changing generated OpenAPI behavior.
+6. Preserve nested contract schema reference IDs based on full nested type names unless intentionally making a breaking change.
+7. Keep HTTP mapper behavior, OpenAPI metadata, and specification docs aligned in the same change.
+8. Add or update tests under `tests/Kawa.Web.Tests` for generated-client-facing behavior.
 
 ## Documentation And Changelog
 
@@ -72,6 +73,7 @@ When changing OpenAPI, Swagger, ReDoc, API catalog, endpoint metadata, request/r
 - Update `docs/specification.md` and `docs/specification.ja.md` when public behavior changes.
 - Update `docs/internal-design.md` and `docs/internal-design.ja.md` when implementation boundaries, extension guidance, or maintainer rules change.
 - Keep English and Japanese docs aligned by section order.
+- Keep Mermaid diagrams and sequence diagrams aligned with the behavior they describe when execution flow, dependencies, catalog generation, or OpenAPI generation changes.
 - Do not describe future transports as implemented behavior.
 
 ## Verification
@@ -93,4 +95,3 @@ For OpenAPI or generated-client-facing changes, prefer targeted tests in `tests/
 ## Extra Reference
 
 Read `references/kawa-workflow.md` when you need a compact checklist of source files, tests, and release commands for Kawa maintenance.
-
