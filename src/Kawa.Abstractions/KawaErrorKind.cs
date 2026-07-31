@@ -31,6 +31,36 @@ public enum KawaErrorKind
     Conflict,
 
     /// <summary>
+    /// The caller cancelled the operation.
+    /// </summary>
+    Cancelled,
+
+    /// <summary>
+    /// The operation did not finish before its deadline.
+    /// </summary>
+    DeadlineExceeded,
+
+    /// <summary>
+    /// The target being created already exists.
+    /// </summary>
+    AlreadyExists,
+
+    /// <summary>
+    /// The current state does not satisfy an operation precondition.
+    /// </summary>
+    PreconditionFailed,
+
+    /// <summary>
+    /// A quota, capacity limit, or rate limit was exhausted.
+    /// </summary>
+    ResourceExhausted,
+
+    /// <summary>
+    /// A temporary failure makes retrying the operation meaningful.
+    /// </summary>
+    Unavailable,
+
+    /// <summary>
     /// The failure has no more specific application category.
     /// </summary>
     Unknown,
