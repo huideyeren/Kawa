@@ -80,6 +80,12 @@ public class KawaHttpResultConverterTests
         yield return [KawaErrorKind.Forbidden, StatusCodes.Status403Forbidden];
         yield return [KawaErrorKind.NotFound, StatusCodes.Status404NotFound];
         yield return [KawaErrorKind.Conflict, StatusCodes.Status409Conflict];
+        yield return [KawaErrorKind.Cancelled, 499];
+        yield return [KawaErrorKind.DeadlineExceeded, StatusCodes.Status504GatewayTimeout];
+        yield return [KawaErrorKind.AlreadyExists, StatusCodes.Status409Conflict];
+        yield return [KawaErrorKind.PreconditionFailed, StatusCodes.Status412PreconditionFailed];
+        yield return [KawaErrorKind.ResourceExhausted, StatusCodes.Status429TooManyRequests];
+        yield return [KawaErrorKind.Unavailable, StatusCodes.Status503ServiceUnavailable];
         yield return [KawaErrorKind.Unknown, StatusCodes.Status500InternalServerError];
     }
 }
