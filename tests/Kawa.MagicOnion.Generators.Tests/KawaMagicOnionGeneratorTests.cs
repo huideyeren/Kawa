@@ -53,6 +53,46 @@ public sealed class KawaMagicOnionGeneratorTests
     }
 
     /// <summary>
+    /// Verifies that a generated hub delegates its lifecycle and typed client events
+    /// through Kawa's transport-neutral hub executor.
+    /// </summary>
+    [Fact]
+    public void Generator_EmitsStreamingHubAdapter()
+    {
+        const string source = """
+            using System.Threading;
+            using System.Threading.Tasks;
+            using Kawa.Abstractions;
+            using Kawa.MagicOnion;
+            namespace Demo;
+            [KawaMagicOnionHub("chat")]
+            public sealed class ChatUseCase : IStreamingHubUseCase<string, int>
+            {
+                public Task OnConnectedAsync(IKawaHubSession<int> session, CancellationToken cancellationToken = default) => Task.CompletedTask;
+                public Task HandleAsync(string clientEvent, IKawaHubSession<int> session, CancellationToken cancellationToken = default) => Task.CompletedTask;
+                public Task OnDisconnectedAsync(IKawaHubSession<int> session, System.Exception? exception, CancellationToken cancellationToken = default) => Task.CompletedTask;
+            }
+            """;
+
+        var compilation = CSharpCompilation.Create(
+            "Demo",
+            [CSharpSyntaxTree.ParseText(source)],
+            References,
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+        GeneratorDriver driver = CSharpGeneratorDriver.Create(new KawaMagicOnionGenerator());
+
+        driver = driver.RunGenerators(compilation);
+        var generated = string.Concat(driver.GetRunResult().GeneratedTrees.Select(static tree => tree.GetText().ToString()));
+
+        Assert.Contains("sealed class ChatMagicOnionHubAdapter : global::MagicOnion.Server.Hubs.StreamingHubBase<IChatMagicOnionHub, IChatMagicOnionHubReceiver>, IChatMagicOnionHub", generated);
+        Assert.Contains("override async global::System.Threading.Tasks.ValueTask OnConnected()", generated);
+        Assert.Contains("_executor.HandleAsync(_useCase, clientEvent, _session, Context.CallContext.CancellationToken)", generated);
+
+        driver.RunGeneratorsAndUpdateCompilation(compilation, out var generatedCompilation, out _);
+        Assert.Empty(generatedCompilation.GetDiagnostics().Where(static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error));
+    }
+
+    /// <summary>
     /// Verifies that all transport-neutral streaming use case contracts become the
     /// corresponding MagicOnion raw-streaming methods on one generated service.
     /// </summary>
