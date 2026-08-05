@@ -3,6 +3,7 @@
   <ItemGroup>
     <ProjectReference Include="..\Kawa.Abstractions\Kawa.Abstractions.csproj" />
     <ProjectReference Include="..\Kawa.Core\Kawa.Core.csproj" />
+    <ProjectReference Include="..\Kawa.MagicOnion.Generators\Kawa.MagicOnion.Generators.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
   </ItemGroup>
 
   <ItemGroup>

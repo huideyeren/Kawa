@@ -23,12 +23,14 @@ projects=(
   "src/Kawa.Web/Kawa.Web.csproj"
   "src/Kawa.FSharp/Kawa.FSharp.fsproj"
   "src/Kawa.MagicOnion/Kawa.MagicOnion.csproj"
+  "src/Kawa.MagicOnion.Generators/Kawa.MagicOnion.Generators.csproj"
 )
 
 test_projects=(
   "tests/Kawa.Core.Tests/Kawa.Core.Tests.csproj"
   "tests/Kawa.Web.Tests/Kawa.Web.Tests.csproj"
   "tests/Kawa.MagicOnion.Tests/Kawa.MagicOnion.Tests.csproj"
+  "tests/Kawa.MagicOnion.Generators.Tests/Kawa.MagicOnion.Generators.Tests.csproj"
 )
 
 for project in "${projects[@]}" "${test_projects[@]}"; do
