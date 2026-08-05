@@ -1,6 +1,8 @@
 using System.Text;
 using Grpc.Core;
 using Kawa.Abstractions;
+using Kawa.Core;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
 namespace Kawa.MagicOnion.Tests;
@@ -11,6 +13,24 @@ namespace Kawa.MagicOnion.Tests;
 public sealed class KawaMagicOnionErrorMapperTests
 {
     /// <summary>
+    /// Verifies that MagicOnion registration adds Kawa's executor services.
+    /// </summary>
+    [Fact]
+    public void AddKawaMagicOnion_RegistersKawaExecutors()
+    {
+        var services = new ServiceCollection();
+
+        services.AddKawaMagicOnion();
+        using var provider = services.BuildServiceProvider();
+
+        Assert.NotNull(provider.GetService<UseCaseExecutor>());
+        Assert.NotNull(provider.GetService<ServerStreamingUseCaseExecutor>());
+        Assert.NotNull(provider.GetService<ClientStreamingUseCaseExecutor>());
+        Assert.NotNull(provider.GetService<DuplexStreamingUseCaseExecutor>());
+        Assert.NotNull(provider.GetService<StreamingHubUseCaseExecutor>());
+    }
+
+    /// <summary>
     /// Verifies that applications can explicitly name a generated MagicOnion service.
     /// </summary>
     [Fact]
@@ -19,6 +39,28 @@ public sealed class KawaMagicOnionErrorMapperTests
         var attribute = new KawaMagicOnionServiceAttribute("chat");
 
         Assert.Equal("chat", attribute.Name);
+    }
+
+    /// <summary>
+    /// Verifies that applications can override the generated operation name.
+    /// </summary>
+    [Fact]
+    public void OperationAttribute_PreservesConfiguredOperationName()
+    {
+        var attribute = new KawaMagicOnionOperationAttribute("send");
+
+        Assert.Equal("send", attribute.Name);
+    }
+
+    /// <summary>
+    /// Verifies that applications can explicitly name a generated StreamingHub.
+    /// </summary>
+    [Fact]
+    public void HubAttribute_PreservesConfiguredHubName()
+    {
+        var attribute = new KawaMagicOnionHubAttribute("chat-hub");
+
+        Assert.Equal("chat-hub", attribute.Name);
     }
 
     /// <summary>
