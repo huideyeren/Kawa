@@ -2,6 +2,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Kawa.MagicOnion\Kawa.MagicOnion.csproj" />
+    <ProjectReference Include="..\..\src\Kawa.MagicOnion.Generators\Kawa.MagicOnion.Generators.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
   </ItemGroup>
 
   <ItemGroup>
@@ -15,6 +16,8 @@
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
+    <PackageReference Include="MagicOnion.Client" Version="7.10.2" />
+    <PackageReference Include="Microsoft.AspNetCore.TestHost" Version="10.0.8" />
   </ItemGroup>
 
   <PropertyGroup>

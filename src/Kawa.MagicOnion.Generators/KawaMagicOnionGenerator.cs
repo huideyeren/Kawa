@@ -188,7 +188,7 @@ public sealed class KawaMagicOnionGenerator : IIncrementalGenerator
             }
 
             source.AppendLine();
-            source.AppendLine("    private static async global::System.Collections.Generic.IAsyncEnumerable<TRequest> ReadClientRequests<TRequest, TResponse>(global::MagicOnion.Server.ClientStreamingContext<TRequest, TResponse> stream, global::System.Threading.CancellationToken cancellationToken)");
+            source.AppendLine("    private static async global::System.Collections.Generic.IAsyncEnumerable<TRequest> ReadClientRequests<TRequest, TResponse>(global::MagicOnion.Server.ClientStreamingContext<TRequest, TResponse> stream, [global::System.Runtime.CompilerServices.EnumeratorCancellation] global::System.Threading.CancellationToken cancellationToken)");
             source.AppendLine("    {");
             source.AppendLine("        while (await stream.MoveNext(cancellationToken))");
             source.AppendLine("        {");
@@ -196,7 +196,7 @@ public sealed class KawaMagicOnionGenerator : IIncrementalGenerator
             source.AppendLine("        }");
             source.AppendLine("    }");
             source.AppendLine();
-            source.AppendLine("    private static async global::System.Collections.Generic.IAsyncEnumerable<TRequest> ReadDuplexRequests<TRequest, TResponse>(global::MagicOnion.Server.DuplexStreamingContext<TRequest, TResponse> stream, global::System.Threading.CancellationToken cancellationToken)");
+            source.AppendLine("    private static async global::System.Collections.Generic.IAsyncEnumerable<TRequest> ReadDuplexRequests<TRequest, TResponse>(global::MagicOnion.Server.DuplexStreamingContext<TRequest, TResponse> stream, [global::System.Runtime.CompilerServices.EnumeratorCancellation] global::System.Threading.CancellationToken cancellationToken)");
             source.AppendLine("    {");
             source.AppendLine("        while (await stream.MoveNext(cancellationToken))");
             source.AppendLine("        {");
