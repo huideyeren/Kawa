@@ -10,6 +10,49 @@ namespace Kawa.MagicOnion.Generators.Tests;
 public sealed class KawaMagicOnionGeneratorTests
 {
     /// <summary>
+    /// Verifies that a typed Kawa hub use case produces both the MagicOnion hub
+    /// interface and its receiver interface.
+    /// </summary>
+    [Fact]
+    public void Generator_EmitsStreamingHubAndReceiverInterfaces()
+    {
+        const string source = """
+            using System.Threading;
+            using System.Threading.Tasks;
+            using Kawa.Abstractions;
+            using Kawa.MagicOnion;
+            namespace Demo;
+            [KawaMagicOnionService("chat-service")]
+            public sealed class PingUseCase : IUseCase<string, int>
+            {
+                public Task<KawaResult<int>> ExecuteAsync(string request, CancellationToken cancellationToken = default) => throw null!;
+            }
+            [KawaMagicOnionHub("chat")]
+            public sealed class ChatUseCase : IStreamingHubUseCase<string, int>
+            {
+                public Task OnConnectedAsync(IKawaHubSession<int> session, CancellationToken cancellationToken = default) => Task.CompletedTask;
+                public Task HandleAsync(string clientEvent, IKawaHubSession<int> session, CancellationToken cancellationToken = default) => Task.CompletedTask;
+                public Task OnDisconnectedAsync(IKawaHubSession<int> session, System.Exception? exception, CancellationToken cancellationToken = default) => Task.CompletedTask;
+            }
+            """;
+
+        var compilation = CSharpCompilation.Create(
+            "Demo",
+            [CSharpSyntaxTree.ParseText(source)],
+            References,
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+        GeneratorDriver driver = CSharpGeneratorDriver.Create(new KawaMagicOnionGenerator());
+
+        driver = driver.RunGenerators(compilation);
+        var generated = string.Concat(driver.GetRunResult().GeneratedTrees.Select(static tree => tree.GetText().ToString()));
+
+        Assert.Contains("interface IChatMagicOnionHub : global::MagicOnion.IStreamingHub<IChatMagicOnionHub, IChatMagicOnionHubReceiver>", generated);
+        Assert.Contains("global::System.Threading.Tasks.ValueTask HandleAsync(string clientEvent)", generated);
+        Assert.Contains("interface IChatMagicOnionHubReceiver", generated);
+        Assert.Contains("void OnEvent(int serverEvent)", generated);
+    }
+
+    /// <summary>
     /// Verifies that all transport-neutral streaming use case contracts become the
     /// corresponding MagicOnion raw-streaming methods on one generated service.
     /// </summary>
