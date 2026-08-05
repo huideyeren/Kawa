@@ -10,7 +10,7 @@ using Microsoft.CodeAnalysis.Text;
 namespace Kawa.MagicOnion.Generators;
 
 /// <summary>
-/// Generates MagicOnion unary service contracts and adapters for annotated Kawa use cases.
+/// Generates MagicOnion unary and raw-streaming service contracts and adapters for annotated Kawa use cases.
 /// </summary>
 [Generator]
 public sealed class KawaMagicOnionGenerator : IIncrementalGenerator
@@ -18,6 +18,9 @@ public sealed class KawaMagicOnionGenerator : IIncrementalGenerator
     private const string ServiceAttributeName = "Kawa.MagicOnion.KawaMagicOnionServiceAttribute";
     private const string OperationAttributeName = "Kawa.MagicOnion.KawaMagicOnionOperationAttribute";
     private const string UnaryUseCaseName = "Kawa.Abstractions.IUseCase<TRequest, TResponse>";
+    private const string ServerStreamingUseCaseName = "Kawa.Abstractions.IServerStreamingUseCase<TRequest, TResponse>";
+    private const string ClientStreamingUseCaseName = "Kawa.Abstractions.IClientStreamingUseCase<TRequest, TResponse>";
+    private const string DuplexStreamingUseCaseName = "Kawa.Abstractions.IDuplexStreamingUseCase<TRequest, TResponse>";
 
     /// <inheritdoc />
     public void Initialize(IncrementalGeneratorInitializationContext context)
@@ -33,11 +36,11 @@ public sealed class KawaMagicOnionGenerator : IIncrementalGenerator
         context.RegisterSourceOutput(useCases, static (productionContext, values) => Emit(productionContext, values));
     }
 
-    private static UnaryUseCaseModel? CreateUseCase(GeneratorAttributeSyntaxContext context)
+    private static UseCaseModel? CreateUseCase(GeneratorAttributeSyntaxContext context)
     {
         var useCaseType = (INamedTypeSymbol)context.TargetSymbol;
         var useCaseContract = useCaseType.AllInterfaces.FirstOrDefault(
-            candidate => candidate.OriginalDefinition.ToDisplayString() == UnaryUseCaseName);
+            candidate => IsSupportedUseCaseContract(candidate.OriginalDefinition.ToDisplayString()));
 
         if (useCaseContract is null)
         {
@@ -58,12 +61,33 @@ public sealed class KawaMagicOnionGenerator : IIncrementalGenerator
             operationName = RemoveUseCaseSuffix(useCaseType.Name);
         }
 
-        return new UnaryUseCaseModel(
+        return new UseCaseModel(
             useCaseType.ContainingNamespace.IsGlobalNamespace ? "Generated" : useCaseType.ContainingNamespace.ToDisplayString() + ".Generated",
             serviceName!,
             operationName!,
+            GetUseCaseKind(useCaseContract.OriginalDefinition.ToDisplayString()),
             useCaseContract.TypeArguments[0].ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
             useCaseContract.TypeArguments[1].ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat));
+    }
+
+    private static bool IsSupportedUseCaseContract(string contractName)
+    {
+        return contractName == UnaryUseCaseName
+            || contractName == ServerStreamingUseCaseName
+            || contractName == ClientStreamingUseCaseName
+            || contractName == DuplexStreamingUseCaseName;
+    }
+
+    private static UseCaseKind GetUseCaseKind(string contractName)
+    {
+        return contractName switch
+        {
+            UnaryUseCaseName => UseCaseKind.Unary,
+            ServerStreamingUseCaseName => UseCaseKind.ServerStreaming,
+            ClientStreamingUseCaseName => UseCaseKind.ClientStreaming,
+            DuplexStreamingUseCaseName => UseCaseKind.DuplexStreaming,
+            _ => throw new InvalidOperationException("Unsupported Kawa use case contract."),
+        };
     }
 
     private static string RemoveUseCaseSuffix(string name)
@@ -72,7 +96,7 @@ public sealed class KawaMagicOnionGenerator : IIncrementalGenerator
         return name.EndsWith(suffix, StringComparison.Ordinal) ? name.Substring(0, name.Length - suffix.Length) : name;
     }
 
-    private static void Emit(SourceProductionContext context, ImmutableArray<UnaryUseCaseModel> values)
+    private static void Emit(SourceProductionContext context, ImmutableArray<UseCaseModel> values)
     {
         foreach (var service in values.GroupBy(static value => value.Namespace + "|" + value.ServiceName, StringComparer.Ordinal))
         {
@@ -87,9 +111,7 @@ public sealed class KawaMagicOnionGenerator : IIncrementalGenerator
 
             foreach (var operation in service)
             {
-                source.Append("    global::MagicOnion.UnaryResult<").Append(operation.ResponseType).Append("> ")
-                    .Append(ToIdentifier(operation.OperationName)).Append("Async(")
-                    .Append(operation.RequestType).AppendLine(" request);");
+                AppendServiceOperation(source, operation);
             }
 
             source.AppendLine("}");
@@ -100,15 +122,18 @@ public sealed class KawaMagicOnionGenerator : IIncrementalGenerator
 
             foreach (var operation in service)
             {
-                source.Append("    private readonly global::Kawa.Abstractions.IUseCase<").Append(operation.RequestType).Append(", ").Append(operation.ResponseType)
-                    .Append("> _").Append(ToIdentifier(operation.OperationName)).AppendLine("UseCase;");
+                source.Append("    private readonly ").Append(GetUseCaseContractType(operation)).Append(" _")
+                    .Append(ToIdentifier(operation.OperationName)).AppendLine("UseCase;");
             }
 
             source.AppendLine("    private readonly global::Kawa.Core.UseCaseExecutor _executor;");
+            source.AppendLine("    private readonly global::Kawa.Core.ServerStreamingUseCaseExecutor _serverStreamingExecutor;");
+            source.AppendLine("    private readonly global::Kawa.Core.ClientStreamingUseCaseExecutor _clientStreamingExecutor;");
+            source.AppendLine("    private readonly global::Kawa.Core.DuplexStreamingUseCaseExecutor _duplexStreamingExecutor;");
             source.AppendLine();
             source.Append("    public ").Append(serviceIdentifier).Append("MagicOnionServiceAdapter(");
-            source.Append(string.Join(", ", service.Select(operation => "global::Kawa.Abstractions.IUseCase<" + operation.RequestType + ", " + operation.ResponseType + "> " + LowerFirst(ToIdentifier(operation.OperationName)) + "UseCase")));
-            source.AppendLine(", global::Kawa.Core.UseCaseExecutor executor)");
+            source.Append(string.Join(", ", service.Select(operation => GetUseCaseContractType(operation) + " " + LowerFirst(ToIdentifier(operation.OperationName)) + "UseCase")));
+            source.AppendLine(", global::Kawa.Core.UseCaseExecutor executor, global::Kawa.Core.ServerStreamingUseCaseExecutor serverStreamingExecutor, global::Kawa.Core.ClientStreamingUseCaseExecutor clientStreamingExecutor, global::Kawa.Core.DuplexStreamingUseCaseExecutor duplexStreamingExecutor)");
             source.AppendLine("    {");
             foreach (var operation in service)
             {
@@ -116,28 +141,126 @@ public sealed class KawaMagicOnionGenerator : IIncrementalGenerator
                 source.Append("        _").Append(identifier).Append("UseCase = ").Append(LowerFirst(identifier)).AppendLine("UseCase;");
             }
             source.AppendLine("        _executor = executor;");
+            source.AppendLine("        _serverStreamingExecutor = serverStreamingExecutor;");
+            source.AppendLine("        _clientStreamingExecutor = clientStreamingExecutor;");
+            source.AppendLine("        _duplexStreamingExecutor = duplexStreamingExecutor;");
             source.AppendLine("    }");
 
             foreach (var operation in service)
             {
-                var identifier = ToIdentifier(operation.OperationName);
-                source.AppendLine();
-                source.Append("    public async global::MagicOnion.UnaryResult<").Append(operation.ResponseType).Append("> ").Append(identifier).Append("Async(").Append(operation.RequestType).AppendLine(" request)");
-                source.AppendLine("    {");
-                source.Append("        var result = await _executor.ExecuteAsync(_").Append(identifier).AppendLine("UseCase, request, Context.CallContext.CancellationToken);");
-                source.AppendLine("        if (result.IsSuccess)");
-                source.AppendLine("        {");
-                source.AppendLine("            return result.Value!;");
-                source.AppendLine("        }");
-                source.AppendLine("        var mapped = global::Kawa.MagicOnion.KawaMagicOnionErrorMapper.Map(result.Error!);");
-                source.AppendLine("        Context.CallContext.ResponseTrailers.Add(\"kawa-error-bin\", mapped.KawaErrorJson);");
-                source.AppendLine("        throw new global::MagicOnion.Server.ReturnStatusException(mapped.StatusCode, mapped.Detail);");
-                source.AppendLine("    }");
+                AppendAdapterOperation(source, operation);
             }
+
+            source.AppendLine();
+            source.AppendLine("    private static async global::System.Collections.Generic.IAsyncEnumerable<TRequest> ReadClientRequests<TRequest, TResponse>(global::MagicOnion.Server.ClientStreamingContext<TRequest, TResponse> stream, global::System.Threading.CancellationToken cancellationToken)");
+            source.AppendLine("    {");
+            source.AppendLine("        while (await stream.MoveNext(cancellationToken))");
+            source.AppendLine("        {");
+            source.AppendLine("            yield return stream.Current;");
+            source.AppendLine("        }");
+            source.AppendLine("    }");
+            source.AppendLine();
+            source.AppendLine("    private static async global::System.Collections.Generic.IAsyncEnumerable<TRequest> ReadDuplexRequests<TRequest, TResponse>(global::MagicOnion.Server.DuplexStreamingContext<TRequest, TResponse> stream, global::System.Threading.CancellationToken cancellationToken)");
+            source.AppendLine("    {");
+            source.AppendLine("        while (await stream.MoveNext(cancellationToken))");
+            source.AppendLine("        {");
+            source.AppendLine("            yield return stream.Current;");
+            source.AppendLine("        }");
+            source.AppendLine("    }");
+            source.AppendLine();
+            source.AppendLine("    private void ThrowMappedError(global::Kawa.Abstractions.KawaError error)");
+            source.AppendLine("    {");
+            source.AppendLine("        var mapped = global::Kawa.MagicOnion.KawaMagicOnionErrorMapper.Map(error);");
+            source.AppendLine("        Context.CallContext.ResponseTrailers.Add(\"kawa-error-bin\", mapped.KawaErrorJson);");
+            source.AppendLine("        throw new global::MagicOnion.ReturnStatusException(mapped.StatusCode, mapped.Detail);");
+            source.AppendLine("    }");
 
             source.AppendLine("}");
             context.AddSource(serviceIdentifier + ".MagicOnion.g.cs", SourceText.From(source.ToString(), Encoding.UTF8));
         }
+    }
+
+    private static void AppendServiceOperation(StringBuilder source, UseCaseModel operation)
+    {
+        var identifier = ToIdentifier(operation.OperationName);
+        switch (operation.Kind)
+        {
+            case UseCaseKind.Unary:
+                source.Append("    global::MagicOnion.UnaryResult<").Append(operation.ResponseType).Append("> ").Append(identifier).Append("Async(").Append(operation.RequestType).AppendLine(" request);");
+                break;
+            case UseCaseKind.ServerStreaming:
+                source.Append("    global::System.Threading.Tasks.Task<global::MagicOnion.ServerStreamingResult<").Append(operation.ResponseType).Append(">> ").Append(identifier).Append("Async(").Append(operation.RequestType).AppendLine(" request);");
+                break;
+            case UseCaseKind.ClientStreaming:
+                source.Append("    global::System.Threading.Tasks.Task<global::MagicOnion.ClientStreamingResult<").Append(operation.RequestType).Append(", ").Append(operation.ResponseType).Append(">> ").Append(identifier).AppendLine("Async();");
+                break;
+            case UseCaseKind.DuplexStreaming:
+                source.Append("    global::System.Threading.Tasks.Task<global::MagicOnion.DuplexStreamingResult<").Append(operation.RequestType).Append(", ").Append(operation.ResponseType).Append(">> ").Append(identifier).AppendLine("Async();");
+                break;
+        }
+    }
+
+    private static void AppendAdapterOperation(StringBuilder source, UseCaseModel operation)
+    {
+        var identifier = ToIdentifier(operation.OperationName);
+        source.AppendLine();
+        switch (operation.Kind)
+        {
+            case UseCaseKind.Unary:
+                source.Append("    public async global::MagicOnion.UnaryResult<").Append(operation.ResponseType).Append("> ").Append(identifier).Append("Async(").Append(operation.RequestType).AppendLine(" request)");
+                source.AppendLine("    {");
+                source.Append("        var result = await _executor.ExecuteAsync(_").Append(identifier).AppendLine("UseCase, request, Context.CallContext.CancellationToken);");
+                source.AppendLine("        if (result.IsSuccess) return result.Value!;");
+                source.AppendLine("        ThrowMappedError(result.Error!);");
+                source.AppendLine("        throw new global::System.InvalidOperationException();");
+                source.AppendLine("    }");
+                break;
+            case UseCaseKind.ServerStreaming:
+                source.Append("    public async global::System.Threading.Tasks.Task<global::MagicOnion.ServerStreamingResult<").Append(operation.ResponseType).Append(">> ").Append(identifier).Append("Async(").Append(operation.RequestType).AppendLine(" request)");
+                source.AppendLine("    {");
+                source.Append("        var stream = GetServerStreamingContext<").Append(operation.ResponseType).AppendLine(">();");
+                source.Append("        await foreach (var result in _serverStreamingExecutor.ExecuteAsync(_").Append(identifier).AppendLine("UseCase, request, Context.CallContext.CancellationToken))");
+                source.AppendLine("        {");
+                source.AppendLine("            if (result.IsFailure) ThrowMappedError(result.Error!);");
+                source.AppendLine("            await stream.WriteAsync(result.Value!);");
+                source.AppendLine("        }");
+                source.AppendLine("        return stream.Result();");
+                source.AppendLine("    }");
+                break;
+            case UseCaseKind.ClientStreaming:
+                source.Append("    public async global::System.Threading.Tasks.Task<global::MagicOnion.ClientStreamingResult<").Append(operation.RequestType).Append(", ").Append(operation.ResponseType).Append(">> ").Append(identifier).AppendLine("Async()");
+                source.AppendLine("    {");
+                source.Append("        var stream = GetClientStreamingContext<").Append(operation.RequestType).Append(", ").Append(operation.ResponseType).AppendLine(">();");
+                source.Append("        var result = await _clientStreamingExecutor.ExecuteAsync(_").Append(identifier).AppendLine("UseCase, ReadClientRequests(stream, Context.CallContext.CancellationToken), Context.CallContext.CancellationToken);");
+                source.AppendLine("        if (result.IsFailure) ThrowMappedError(result.Error!);");
+                source.AppendLine("        return stream.Result(result.Value!);");
+                source.AppendLine("    }");
+                break;
+            case UseCaseKind.DuplexStreaming:
+                source.Append("    public async global::System.Threading.Tasks.Task<global::MagicOnion.DuplexStreamingResult<").Append(operation.RequestType).Append(", ").Append(operation.ResponseType).Append(">> ").Append(identifier).AppendLine("Async()");
+                source.AppendLine("    {");
+                source.Append("        var stream = GetDuplexStreamingContext<").Append(operation.RequestType).Append(", ").Append(operation.ResponseType).AppendLine(">();");
+                source.Append("        await foreach (var result in _duplexStreamingExecutor.ExecuteAsync(_").Append(identifier).AppendLine("UseCase, ReadDuplexRequests(stream, Context.CallContext.CancellationToken), Context.CallContext.CancellationToken))");
+                source.AppendLine("        {");
+                source.AppendLine("            if (result.IsFailure) ThrowMappedError(result.Error!);");
+                source.AppendLine("            await stream.WriteAsync(result.Value!);");
+                source.AppendLine("        }");
+                source.AppendLine("        return stream.Result();");
+                source.AppendLine("    }");
+                break;
+        }
+    }
+
+    private static string GetUseCaseContractType(UseCaseModel operation)
+    {
+        return operation.Kind switch
+        {
+            UseCaseKind.Unary => "global::Kawa.Abstractions.IUseCase<" + operation.RequestType + ", " + operation.ResponseType + ">",
+            UseCaseKind.ServerStreaming => "global::Kawa.Abstractions.IServerStreamingUseCase<" + operation.RequestType + ", " + operation.ResponseType + ">",
+            UseCaseKind.ClientStreaming => "global::Kawa.Abstractions.IClientStreamingUseCase<" + operation.RequestType + ", " + operation.ResponseType + ">",
+            UseCaseKind.DuplexStreaming => "global::Kawa.Abstractions.IDuplexStreamingUseCase<" + operation.RequestType + ", " + operation.ResponseType + ">",
+            _ => throw new InvalidOperationException("Unsupported Kawa use case contract."),
+        };
     }
 
     private static string ToIdentifier(string value)
@@ -148,13 +271,22 @@ public sealed class KawaMagicOnionGenerator : IIncrementalGenerator
 
     private static string LowerFirst(string value) => char.ToLowerInvariant(value[0]) + value.Substring(1);
 
-    private sealed class UnaryUseCaseModel
+    private enum UseCaseKind
     {
-        public UnaryUseCaseModel(string @namespace, string serviceName, string operationName, string requestType, string responseType)
+        Unary,
+        ServerStreaming,
+        ClientStreaming,
+        DuplexStreaming,
+    }
+
+    private sealed class UseCaseModel
+    {
+        public UseCaseModel(string @namespace, string serviceName, string operationName, UseCaseKind kind, string requestType, string responseType)
         {
             Namespace = @namespace;
             ServiceName = serviceName;
             OperationName = operationName;
+            Kind = kind;
             RequestType = requestType;
             ResponseType = responseType;
         }
@@ -162,6 +294,7 @@ public sealed class KawaMagicOnionGenerator : IIncrementalGenerator
         public string Namespace { get; }
         public string ServiceName { get; }
         public string OperationName { get; }
+        public UseCaseKind Kind { get; }
         public string RequestType { get; }
         public string ResponseType { get; }
     }
