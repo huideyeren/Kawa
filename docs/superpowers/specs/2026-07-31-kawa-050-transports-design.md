@@ -6,7 +6,7 @@ Approved design. This document defines the intended 0.5.0 scope before implement
 
 ## Goals
 
-Kawa 0.5.0 adds first-class, independently installable adapters for MagicOnion gRPC, command-line applications, and .NET Aspire. Each adapter must let an application reuse Kawa use cases without adding transport-specific types to its application layer.
+Kawa 0.5.0 adds first-class, independently installable adapters for MagicOnion gRPC, protobuf gRPC, command-line applications, and .NET Aspire. Each adapter must let an application reuse Kawa use cases without adding transport-specific types to its application layer.
 
 The release includes NuGet packages, `dotnet new` templates, runnable samples, English and Japanese public and maintainer documentation, and automated validation.
 
@@ -23,6 +23,9 @@ The release includes NuGet packages, `dotnet new` templates, runnable samples, E
 | --- | --- | --- |
 | `Kawa.MagicOnion` | Runtime server/client integration, DI registration, generated-adapter support, and Kawa error conversion to gRPC. | Depends on Core, Abstractions, and MagicOnion. |
 | `Kawa.MagicOnion.Generators` | Incremental source generator and diagnostics for service contracts, adapters, and client registration. | Analyzer-only dependency; generated code depends on `Kawa.MagicOnion`. |
+| `Kawa.Grpc` | Standard protobuf gRPC runtime integration, Kawa-originated `.proto` generation, and gRPC status/trailer conversion. | Depends on Core, Abstractions, ASP.NET Core gRPC, and protobuf tooling. |
+| `Kawa.Grpc.Generators` | An MSBuild schema-generation task that emits `.proto` schemas before `Grpc.Tools` compiles them. | Build-time dependency; generated code depends on `Kawa.Grpc`. |
+| `Kawa.Grpc.ProtoAdapter` | Explicitly connects existing generated protobuf message types and service bases to Kawa use cases. | Depends on Core, Abstractions, and gRPC generated types. |
 | `Kawa.Cli` | `System.CommandLine` command binding, standard I/O, JSON output, diagnostics, and exit-code mapping. | Depends on Core and Abstractions. |
 | `Kawa.Aspire` | Service-side Kawa observability, health checks, and service-discovery integration. | Depends on the relevant Aspire client/telemetry packages. |
 | `Kawa.Aspire.Hosting` | AppHost project-resource extensions for Kawa MagicOnion and CLI projects. | Depends on Aspire Hosting only. |
@@ -72,6 +75,16 @@ The runtime API is intentionally small: applications register Kawa and MagicOnio
 
 Raw gRPC supports all four communication patterns. StreamingHub support includes typed client receivers, connection lifecycle, direct server events, group broadcasts, and named group membership. It does not promise to abstract every vendor-specific MagicOnion extension.
 
+## Standard Protobuf gRPC Integration
+
+`Kawa.Grpc` is the Kawa-first standard gRPC adapter. Kawa use cases annotated for protobuf generation produce a deterministic `.proto` schema under the build output directory, standard gRPC service adapters, and client helpers. An MSBuild schema-generation task runs before `Grpc.Tools`, which then consumes the generated schema during the same build. This is deliberately not a Roslyn source generator: the `.proto` must exist before protobuf compilation starts. The `kawa grpc export` command explicitly copies the same schema into an application's `Protos/` directory for source control and distribution to non-.NET clients; ordinary builds never modify tracked source files.
+
+Kawa-originated protobuf contracts support scalar values, `string`, `bool`, `byte[]`, enums, nested contracts, and repeated values. Every serialized member requires `[KawaProtoField(n)]`; changing or reusing a field number is a breaking protocol change and produces a diagnostic.
+
+`Kawa.Grpc.ProtoAdapter` supports existing `.proto` contracts without making them a Kawa dependency. Applications implement `IGrpcProtoAdapter<TProto, TContract>` for request and response conversion, then register a generated-service-base adapter explicitly. The adapter deliberately performs no property-name inference: protobuf schema ownership, message conversion, and compatibility remain the application's responsibility.
+
+Standard gRPC uses the same `KawaError` status mapping and UTF-8 JSON `kawa-error-bin` trailer as MagicOnion. The three raw streaming patterns map to standard gRPC streaming APIs. StreamingHub remains MagicOnion-specific and has no protobuf gRPC counterpart.
+
 ## Error Model
 
 Existing `KawaErrorKind` values retain their meaning. The following transport-neutral kinds are added:
@@ -114,7 +127,7 @@ The hosting package does not run services itself and does not force Aspire onto 
 
 ## Catalog and Documentation
 
-The current HTTP catalog stays compatible. Each entry gains an optional, additive `transports` array. Its values identify `http`, `grpc`, `cli`, or `streamingHub` exposure and include the respective route, service/operation, command path, or hub name. Consumers that do not read `transports` retain current behavior.
+The current HTTP catalog stays compatible. Each entry gains an optional, additive `transports` array. Its values identify `http`, `grpc`, `cli`, or `streamingHub` exposure and include the respective route, service/operation, command path, or hub name. A gRPC entry identifies whether it uses `magicOnion` or `protobuf`. Consumers that do not read `transports` retain current behavior.
 
 The implementation updates both language versions of:
 
@@ -128,7 +141,8 @@ The implementation updates both language versions of:
 
 1. A CLI application with `System.CommandLine`, JSON output, a formatted-output extension point, and error/exit-code behavior.
 2. A MagicOnion server/client pair showing unary, all three raw stream directions, and a typed StreamingHub.
-3. An Aspire distributed application containing AppHost, ServiceDefaults, a MagicOnion service, and a CLI client/job resource.
+3. A protobuf gRPC server/client pair showing Kawa-originated schema export and an existing-proto adapter.
+4. An Aspire distributed application containing AppHost, ServiceDefaults, a MagicOnion service, a protobuf gRPC service, and a CLI client/job resource.
 
 Runnable samples mirror the templates and share a small chat-oriented domain. The samples demonstrate the same application contracts through HTTP, MagicOnion's four raw gRPC modes, StreamingHub events/groups, and CLI commands. The Aspire sample starts the topology and exposes telemetry in the dashboard.
 
@@ -136,6 +150,7 @@ Runnable samples mirror the templates and share a small chat-oriented domain. Th
 
 - Core tests cover all new stream executors, cancellation, and terminal-result behavior.
 - MagicOnion integration tests cover unary, server/client/duplex streaming, generated contract usability, status/trailer conversion, hub connect/disconnect, event delivery, and group broadcast.
+- Protobuf gRPC tests cover generated schemas, `Grpc.Tools` compilation, unary and all raw stream directions, status/trailer conversion, schema field-number diagnostics, and explicit existing-proto adapters.
 - Generator tests assert generated sources and all diagnostics.
 - CLI tests cover parsing integration, standard output/error separation, JSON and custom formatting, cancellation, and exit-code substitution.
 - Aspire tests cover AppHost resource references, service-discovery configuration, health checks, and emitted telemetry.
@@ -150,6 +165,7 @@ Runnable samples mirror the templates and share a small chat-oriented domain. Th
 
 1. Add transport-neutral streaming, hub, and error contracts with Core executors and tests.
 2. Add the MagicOnion runtime package, source generator, generated-code tests, and gRPC/hub integration tests.
-3. Add CLI integration, template, sample, and tests.
-4. Add Aspire service and hosting packages, distributed template/sample, and AppHost tests.
-5. Enrich the catalog, update English/Japanese documentation and changelogs, validate all templates, and package the full solution.
+3. Add protobuf gRPC runtime, Kawa-originated schema generator, explicit proto adapter, and interoperability tests.
+4. Add CLI integration, template, sample, and tests.
+5. Add Aspire service and hosting packages, distributed template/sample, and AppHost tests.
+6. Enrich the catalog, update English/Japanese documentation and changelogs, validate all templates, and package the full solution.

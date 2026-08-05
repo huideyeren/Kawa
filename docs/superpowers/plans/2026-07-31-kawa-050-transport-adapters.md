@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Deliver Kawa 0.5.0 as a backward-compatible release with MagicOnion raw gRPC and StreamingHub, `System.CommandLine` CLI I/O, Aspire integration, templates, samples, tests, and bilingual documentation.
+**Goal:** Deliver Kawa 0.5.0 as a backward-compatible release with MagicOnion raw gRPC and StreamingHub, standard protobuf gRPC in both Kawa-originated and existing-proto directions, `System.CommandLine` CLI I/O, Aspire integration, templates, samples, tests, and bilingual documentation.
 
-**Architecture:** Keep application contracts and executors in `Kawa.Abstractions`/`Kawa.Core`; ship MagicOnion, CLI, and Aspire as independent adapters. An incremental generator emits MagicOnion service/hub contracts and server adapters from explicit Kawa attributes. New transports add catalog metadata but do not change current HTTP behavior.
+**Architecture:** Keep application contracts and executors in `Kawa.Abstractions`/`Kawa.Core`; ship MagicOnion, protobuf gRPC, CLI, and Aspire as independent adapters. An incremental generator emits MagicOnion contracts, while an MSBuild task emits Kawa-originated protobuf schemas before `Grpc.Tools` runs. Existing protobuf applications use explicit adapters rather than inferred member mapping. New transports add catalog metadata but do not change current HTTP behavior.
 
 **Tech Stack:** .NET 10, MagicOnion.Server 7.10.2, System.CommandLine 2.0.10, .NET Aspire 13.4.6, xUnit, Roslyn incremental generators, ASP.NET Core TestHost.
 
@@ -15,6 +15,7 @@
 - Add the six approved `KawaErrorKind` values exactly: `Cancelled`, `DeadlineExceeded`, `AlreadyExists`, `PreconditionFailed`, `ResourceExhausted`, `Unavailable`.
 - Stream failures terminate transports; they are never emitted as successful stream payloads.
 - Generated contracts use attributes `KawaMagicOnionServiceAttribute`, `KawaMagicOnionOperationAttribute`, and `KawaMagicOnionHubAttribute`; generated namespace suffix is `.Generated`.
+- Protobuf schemas generated from Kawa contracts require stable `[KawaProtoField(n)]` numbers; `Kawa.Grpc.ProtoAdapter` only provides explicit `IGrpcProtoAdapter<TProto,TContract>` registration.
 - Keep English/Japanese specification, internal design, and changelog section order aligned.
 - Every implementation task starts with a failing test, ends with its narrow test command, and commits only its own files.
 
@@ -26,6 +27,7 @@
 - `src/Kawa.Core/`: executors for stream and hub contracts.
 - `src/Kawa.MagicOnion/`: runtime registration, gRPC error mapper, generated-service mapping helpers, and attributes.
 - `src/Kawa.MagicOnion.Generators/`: Roslyn analyzer package and generated source.
+- `src/Kawa.Grpc/`, `src/Kawa.Grpc.Generators/`, and `src/Kawa.Grpc.ProtoAdapter/`: standard gRPC runtime, Kawa-first protobuf generation, and explicit existing-proto adapters.
 - `src/Kawa.Cli/`: System.CommandLine binding, JSON/text writers, and exit-code mapper.
 - `src/Kawa.Aspire/` and `src/Kawa.Aspire.Hosting/`: service defaults and AppHost extensions.
 - `tests/Kawa.*.Tests/`: one focused project per new package plus existing regression suites.
@@ -129,7 +131,29 @@ Assert.Contains("Unavailable", Encoding.UTF8.GetString(trailers.GetBytes("kawa-e
 - [ ] **Step 4: Re-run the project and solution tests; expect PASS.**
 - [ ] **Step 5: Commit `test: cover MagicOnion streaming and hubs`.**
 
-### Task 6: Add System.CommandLine CLI integration
+### Task 6: Add standard protobuf gRPC generation and existing-proto adapters
+
+**Files:**
+- Create: `src/Kawa.Grpc/Kawa.Grpc.csproj`, `KawaProtoServiceAttribute.cs`, `KawaProtoFieldAttribute.cs`, `KawaGrpcErrorMapper.cs`, `KawaGrpcServiceCollectionExtensions.cs`
+- Create: `src/Kawa.Grpc.Generators/Kawa.Grpc.Generators.csproj`, `KawaProtoSchemaGenerationTask.cs`, `Diagnostics.cs`
+- Create: `src/Kawa.Grpc.ProtoAdapter/Kawa.Grpc.ProtoAdapter.csproj`, `IGrpcProtoAdapter.cs`, `GrpcProtoAdapterServiceCollectionExtensions.cs`
+- Create: `tests/Kawa.Grpc.Tests/Kawa.Grpc.Tests.csproj`, `KawaProtoGeneratorTests.cs`, `GrpcProtoAdapterTests.cs`
+- Modify: `Kawa.sln`, `eng/pack.sh`, `docs/superpowers/specs/2026-07-31-kawa-050-transports-design.md`, `docs/superpowers/specs/2026-07-31-kawa-050-transports-design.ja.md`
+
+**Produces:** Kawa-first `.proto` schemas under `obj/`, explicit `kawa grpc export` output, standard gRPC service adapters, and an explicit existing-proto request/response adapter contract.
+
+- [ ] **Step 1: Write failing generator tests that require `[KawaProtoField(1)]` and assert a unary `service`/`rpc` schema plus a duplicate-field-number diagnostic; write adapter tests for explicit request and response conversion.**
+```csharp
+Assert.Contains("service Chat", generatedProto);
+Assert.Contains("rpc Send(SendRequest) returns (SendResponse)", generatedProto);
+Assert.Contains(diagnostics, diagnostic => diagnostic.Id == "KAWA5101");
+```
+- [ ] **Step 2: Run `dotnet test tests/Kawa.Grpc.Tests/Kawa.Grpc.Tests.csproj --no-restore`; expect compilation failures before the projects exist.**
+- [ ] **Step 3: Implement protobuf attributes, the MSBuild schema-generation task that runs before `Grpc.Tools`, gRPC status/trailer conversion, and `IGrpcProtoAdapter<TProto, TContract>` with no inferred member mapping.**
+- [ ] **Step 4: Add a generated protobuf server/client smoke test for unary and all three gRPC stream directions; run the gRPC project tests and `dotnet test Kawa.sln --no-restore --disable-build-servers`; expect PASS.**
+- [ ] **Step 5: Commit `feat: add protobuf gRPC adapters`.**
+
+### Task 7: Add System.CommandLine CLI integration
 
 **Files:**
 - Create: `src/Kawa.Cli/Kawa.Cli.csproj`, `KawaCommandExtensions.cs`, `KawaCliResultWriter.cs`, `IKawaCliExitCodeMapper.cs`, `KawaDefaultCliExitCodeMapper.cs`
@@ -144,7 +168,7 @@ Assert.Contains("Unavailable", Encoding.UTF8.GetString(trailers.GetBytes("kawa-e
 - [ ] **Step 4: Re-run CLI tests and the solution suite; expect PASS.**
 - [ ] **Step 5: Commit `feat: add System.CommandLine integration`.**
 
-### Task 7: Add Aspire service and hosting integration
+### Task 8: Add Aspire service and hosting integration
 
 **Files:**
 - Create: `src/Kawa.Aspire/Kawa.Aspire.csproj`, `KawaAspireServiceCollectionExtensions.cs`, `KawaAspireEndpointRouteBuilderExtensions.cs`
@@ -160,21 +184,21 @@ Assert.Contains("Unavailable", Encoding.UTF8.GetString(trailers.GetBytes("kawa-e
 - [ ] **Step 4: Run Aspire tests, then the full solution.**
 - [ ] **Step 5: Commit `feat: add Aspire Kawa integrations`.**
 
-### Task 8: Add templates and runnable samples
+### Task 9: Add templates and runnable samples
 
 **Files:**
-- Create: `templates/kawa-cli/.template.config/template.json`, `templates/kawa-magiconion/.template.config/template.json`, `templates/kawa-aspire/.template.config/template.json`
-- Create: `samples/Kawa.Sample.Cli/`, `samples/Kawa.Sample.MagicOnion.Server/`, `samples/Kawa.Sample.MagicOnion.Client/`, `samples/Kawa.Sample.Aspire.AppHost/`, `samples/Kawa.Sample.Aspire.ServiceDefaults/`
+- Create: `templates/kawa-cli/.template.config/template.json`, `templates/kawa-magiconion/.template.config/template.json`, `templates/kawa-grpc/.template.config/template.json`, `templates/kawa-aspire/.template.config/template.json`
+- Create: `samples/Kawa.Sample.Cli/`, `samples/Kawa.Sample.MagicOnion.Server/`, `samples/Kawa.Sample.MagicOnion.Client/`, `samples/Kawa.Sample.Grpc.Server/`, `samples/Kawa.Sample.Grpc.Client/`, `samples/Kawa.Sample.Aspire.AppHost/`, `samples/Kawa.Sample.Aspire.ServiceDefaults/`
 - Create: `tests/Kawa.Templates.Tests/Kawa.Templates.Tests.csproj`, `TemplateSmokeTests.cs`
 - Modify: `Kawa.sln`, `eng/pack.sh`
 
 - [ ] **Step 1: Write smoke tests that install `Kawa.Templates` from a local package, instantiate each short name, restore, build, and invoke the CLI sample.**
 - [ ] **Step 2: Run template tests; expect missing template/package failures.**
-- [ ] **Step 3: Add the three template manifests and chat-domain samples demonstrating HTTP, all raw gRPC modes, hub groups, CLI JSON, and Aspire AppHost topology.**
+- [ ] **Step 3: Add the four template manifests and chat-domain samples demonstrating HTTP, all raw gRPC modes, hub groups, CLI JSON, Kawa-originated protobuf schema export, an explicit existing-proto adapter, and Aspire AppHost topology.**
 - [ ] **Step 4: Run each generated project restore/build plus template tests; expect PASS.**
 - [ ] **Step 5: Commit `feat: add Kawa 0.5 templates and samples`.**
 
-### Task 9: Enrich catalog, finalize documents, release metadata, and verification
+### Task 10: Enrich catalog, finalize documents, release metadata, and verification
 
 **Files:**
 - Modify: `src/Kawa.Abstractions/KawaApiCatalog.cs`, `src/Kawa.Abstractions/KawaApiCatalogContract.cs`, `src/Kawa.Abstractions/KawaApiCatalogErrorResponse.cs`, `src/Kawa.Abstractions/KawaApiCatalogUseCase.cs`, `src/Kawa.Web/KawaApiCatalogEndpointRouteBuilderExtensions.cs`, `tests/Kawa.Core.Tests/KawaApiCatalogTests.cs`
@@ -190,6 +214,6 @@ Assert.Contains("Unavailable", Encoding.UTF8.GetString(trailers.GetBytes("kawa-e
 
 ## Plan Self-Review
 
-- Spec coverage: Tasks 1-2 cover transport-independent contracts/errors and HTTP compatibility; Tasks 3-5 cover all MagicOnion modes and StreamingHub; Task 6 covers CLI; Task 7 covers both Aspire packages; Task 8 covers all templates/samples; Task 9 covers catalog, bilingual docs, changelog, version, packaging, and regression verification.
+- Spec coverage: Tasks 1-2 cover transport-independent contracts/errors and HTTP compatibility; Tasks 3-5 cover all MagicOnion modes and StreamingHub; Task 6 covers both Kawa-originated and existing-proto protobuf gRPC; Task 7 covers CLI; Task 8 covers both Aspire packages; Task 9 covers all templates/samples; Task 10 covers catalog, bilingual docs, changelog, version, packaging, and regression verification.
 - Placeholder scan: no deferred implementation or unnamed API is present; all planned public types, package versions, test targets, and output behavior are named above.
 - Type consistency: Tasks 2-5 consume the exact contracts produced by Task 1; Tasks 3-5 use the exact generator attributes and runtime extensions defined in the global constraints; Task 7 consumes the runtime package built by Tasks 3-5.

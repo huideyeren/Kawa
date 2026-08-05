@@ -6,7 +6,7 @@
 
 ## 目的
 
-Kawa 0.5.0では、MagicOnion gRPC、コマンドラインアプリケーション、.NET Aspireのための、単独で導入可能な一級アダプターを追加します。各アダプターは、アプリケーション層へトランスポート固有の型を持ち込まずに、Kawaのユースケースを再利用できなければなりません。
+Kawa 0.5.0では、MagicOnion gRPC、protobuf gRPC、コマンドラインアプリケーション、.NET Aspireのための、単独で導入可能な一級アダプターを追加します。各アダプターは、アプリケーション層へトランスポート固有の型を持ち込まずに、Kawaのユースケースを再利用できなければなりません。
 
 本リリースにはNuGetパッケージ、`dotnet new`テンプレート、実行可能なサンプル、英日両方の公開・保守者向けドキュメント、自動検証を含めます。
 
@@ -23,6 +23,9 @@ Kawa 0.5.0では、MagicOnion gRPC、コマンドラインアプリケーショ�
 | --- | --- | --- |
 | `Kawa.MagicOnion` | 実行時のサーバー／クライアント統合、DI登録、生成アダプターの支援、KawaエラーのgRPC変換。 | Core、Abstractions、MagicOnionに依存。 |
 | `Kawa.MagicOnion.Generators` | サービス契約、アダプター、クライアント登録コードのIncremental Source Generatorと診断。 | Analyzer専用の依存。生成コードは`Kawa.MagicOnion`に依存。 |
+| `Kawa.Grpc` | 標準protobuf gRPCの実行時統合、Kawa起点の`.proto`生成、gRPCステータス／トレーラー変換。 | Core、Abstractions、ASP.NET Core gRPC、protobuf toolingに依存。 |
+| `Kawa.Grpc.Generators` | `Grpc.Tools` より前に`.proto`スキーマを出力するMSBuildスキーマ生成タスク。 | ビルド時依存。生成コードは`Kawa.Grpc`に依存。 |
+| `Kawa.Grpc.ProtoAdapter` | 既存の生成済みprotobufメッセージ型とサービスBaseをKawaユースケースへ明示的に接続。 | Core、Abstractions、gRPC生成型に依存。 |
 | `Kawa.Cli` | `System.CommandLine`のコマンド結線、標準入出力、JSON出力、診断、終了コード変換。 | CoreとAbstractionsに依存。 |
 | `Kawa.Aspire` | サービス側のKawa観測性、ヘルスチェック、サービスディスカバリー統合。 | 必要なAspireクライアント／テレメトリーパッケージに依存。 |
 | `Kawa.Aspire.Hosting` | Kawa MagicOnion／CLIプロジェクト用のAppHostプロジェクトリソース拡張。 | Aspire Hostingのみに依存。 |
@@ -72,6 +75,16 @@ StreamingHubは通常の双方向ストリーミングとして扱わず、型�
 
 raw gRPCは4種類すべての通信形態をサポートします。StreamingHubは、型付きクライアントReceiver、接続ライフサイクル、サーバーからの直接イベント、グループブロードキャスト、名前付きグループへの参加をサポートします。ベンダー固有のMagicOnion拡張をすべて抽象化することは約束しません。
 
+## 標準protobuf gRPC統合
+
+`Kawa.Grpc`はKawa起点の標準gRPCアダプターです。protobuf生成を注釈したKawaユースケースから、ビルド出力ディレクトリに決定的な`.proto`スキーマ、標準gRPCサービスアダプター、クライアントヘルパーを生成します。MSBuildスキーマ生成タスクが`Grpc.Tools`より前に実行され、同じビルド内で`Grpc.Tools`が生成スキーマを処理します。生成された`.proto`はprotobufコンパイルの開始前に必要なため、これはRoslynソース生成器ではなくMSBuildタスクとします。`kawa grpc export`コマンドは、同じスキーマをソース管理および非.NETクライアントへの配布向けに、アプリケーションの`Protos/`ディレクトリへ明示的にコピーします。通常のビルドが追跡対象のソースを変更することはありません。
+
+Kawa起点のprotobuf契約は、scalar値、`string`、`bool`、`byte[]`、列挙、ネストした契約、繰り返し値をサポートします。シリアライズする各メンバーには`[KawaProtoField(n)]`が必要です。フィールド番号の変更または再利用は破壊的なプロトコル変更であり、診断を出します。
+
+`Kawa.Grpc.ProtoAdapter`は、既存`.proto`をKawaへの依存にせずにサポートします。アプリケーションはリクエスト／レスポンス変換のために`IGrpcProtoAdapter<TProto, TContract>`を実装し、生成済みサービスBaseアダプターを明示的に登録します。アダプターはプロパティ名の推測変換を行いません。protobufスキーマの所有、メッセージ変換、互換性はアプリケーションの責任です。
+
+標準gRPCはMagicOnionと同じ`KawaError`のステータスマッピングおよびUTF-8 JSONの`kawa-error-bin`トレーラーを使います。3種類のraw streamは標準gRPCのストリーミングAPIへ対応します。StreamingHubはMagicOnion専用のままであり、protobuf gRPCに対応物はありません。
+
 ## エラーモデル
 
 既存の`KawaErrorKind`値は意味を変えずに維持します。次のトランスポート非依存の種類を追加します。
@@ -114,7 +127,7 @@ Hostingパッケージはサービスを自ら実行せず、Kawa.Web、MagicOni
 
 ## Catalogとドキュメント
 
-現在のHTTP Catalogは互換性を保ちます。各エントリーには、任意の追加フィールドとして`transports`配列を持たせます。配列の値は`http`、`grpc`、`cli`、`streamingHub`の公開形態を識別し、それぞれルート、サービス／操作、コマンドパス、Hub名を含みます。`transports`を読まない既存コンシューマーの動作は変わりません。
+現在のHTTP Catalogは互換性を保ちます。各エントリーには、任意の追加フィールドとして`transports`配列を持たせます。配列の値は`http`、`grpc`、`cli`、`streamingHub`の公開形態を識別し、それぞれルート、サービス／操作、コマンドパス、Hub名を含みます。gRPCエントリーは`magicOnion`または`protobuf`を識別します。`transports`を読まない既存コンシューマーの動作は変わりません。
 
 実装では、次の英日両方を更新します。
 
@@ -128,7 +141,8 @@ Hostingパッケージはサービスを自ら実行せず、Kawa.Web、MagicOni
 
 1. `System.CommandLine`、JSON出力、整形出力の拡張点、エラー／終了コード動作を備えたCLIアプリケーション。
 2. Unary、3種類すべてのraw stream、型付きStreamingHubを示すMagicOnionサーバー／クライアントの組。
-3. AppHost、ServiceDefaults、MagicOnionサービス、CLIクライアント／ジョブリソースを含むAspire分散アプリケーション。
+3. Kawa起点のスキーマexportと既存protoアダプターを示すprotobuf gRPCサーバー／クライアントの組。
+4. AppHost、ServiceDefaults、MagicOnionサービス、protobuf gRPCサービス、CLIクライアント／ジョブリソースを含むAspire分散アプリケーション。
 
 実行可能なサンプルはテンプレートと対応させ、小さなチャットドメインを共有します。サンプルは、同じアプリケーション契約をHTTP、MagicOnionの4種類のraw gRPC、StreamingHubのイベント／グループ、CLIコマンドで示します。Aspireサンプルはトポロジーを起動し、ダッシュボードにテレメトリーを出します。
 
@@ -136,6 +150,7 @@ Hostingパッケージはサービスを自ら実行せず、Kawa.Web、MagicOni
 
 - Coreテストは、新しいすべてのStream Executor、キャンセル、終端結果の動作を対象にします。
 - MagicOnion統合テストは、Unary、Server／Client／Duplex Streaming、生成契約の利用性、ステータス／トレーラー変換、Hubの接続／切断、イベント配信、グループブロードキャストを対象にします。
+- protobuf gRPCテストは、生成スキーマ、`Grpc.Tools`コンパイル、Unaryと3種類すべてのraw stream、ステータス／トレーラー変換、スキーマフィールド番号の診断、明示的な既存protoアダプターを対象にします。
 - Generatorテストは、生成ソースとすべての診断を検証します。
 - CLIテストは、パース統合、標準出力／標準エラーの分離、JSONとカスタム整形、キャンセル、終了コードの差し替えを対象にします。
 - Aspireテストは、AppHostリソース参照、サービスディスカバリー設定、ヘルスチェック、出力されるテレメトリーを対象にします。
@@ -150,6 +165,7 @@ Hostingパッケージはサービスを自ら実行せず、Kawa.Web、MagicOni
 
 1. トランスポート非依存のストリーム・Hub・エラー契約と、Core Executor・テストを追加する。
 2. MagicOnion Runtimeパッケージ、Source Generator、生成コードテスト、gRPC／Hub統合テストを追加する。
-3. CLI統合、テンプレート、サンプル、テストを追加する。
-4. AspireのService／Hostingパッケージ、分散テンプレート／サンプル、AppHostテストを追加する。
-5. Catalogを拡張し、英日ドキュメントと変更履歴を更新し、全テンプレートを検証し、ソリューション全体をパッケージ化する。
+3. protobuf gRPC Runtime、Kawa起点のスキーマGenerator、明示的protoアダプター、相互運用テストを追加する。
+4. CLI統合、テンプレート、サンプル、テストを追加する。
+5. AspireのService／Hostingパッケージ、分散テンプレート／サンプル、AppHostテストを追加する。
+6. Catalogを拡張し、英日ドキュメントと変更履歴を更新し、全テンプレートを検証し、ソリューション全体をパッケージ化する。
