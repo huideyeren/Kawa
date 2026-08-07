@@ -64,6 +64,19 @@ public sealed class MagicOnionTransportTests
         Assert.Equal(3, await stream.ResponseAsync);
     }
 
+    [Fact]
+    public async Task GeneratedDuplexStreamingAdapter_EchoesRequests()
+    {
+        using var host = await CreateHostAsync(services => services.AddSingleton<IDuplexStreamingUseCase<string, string>, EchoStreamUseCase>());
+        using var channel = Grpc.Net.Client.GrpcChannel.ForAddress("http://localhost", new Grpc.Net.Client.GrpcChannelOptions { HttpHandler = host.GetTestServer().CreateHandler() });
+        var client = MagicOnionClient.Create<Generated.IEchoStreamMagicOnionService>(channel);
+        var stream = await client.EchoStreamAsync();
+        await stream.RequestStream.WriteAsync("Tenryu");
+        await stream.RequestStream.CompleteAsync();
+        Assert.True(await stream.ResponseStream.MoveNext(CancellationToken.None));
+        Assert.Equal("Tenryu", stream.ResponseStream.Current);
+    }
+
     [KawaMagicOnionService("echo")]
     public sealed class EchoUseCase : IUseCase<string, string>
     {
@@ -87,6 +100,13 @@ public sealed class MagicOnionTransportTests
     {
         public async Task<KawaResult<int>> ExecuteAsync(IAsyncEnumerable<int> requests, CancellationToken cancellationToken = default)
         { var sum = 0; await foreach (var value in requests) sum += value; return KawaResult<int>.Success(sum); }
+    }
+
+    [KawaMagicOnionService("echo-stream")]
+    public sealed class EchoStreamUseCase : IDuplexStreamingUseCase<string, string>
+    {
+        public async IAsyncEnumerable<KawaResult<string>> ExecuteAsync(IAsyncEnumerable<string> requests, [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default)
+        { await foreach (var value in requests) yield return KawaResult<string>.Success(value); }
     }
 
     private static Task<IHost> CreateHostAsync(Action<IServiceCollection> configure) => new HostBuilder().ConfigureWebHost(webHost => webHost.UseTestServer().ConfigureServices(services => { services.AddKawaMagicOnion(); configure(services); }).Configure(app => app.UseRouting().UseEndpoints(endpoints => endpoints.MapKawaMagicOnionServices()))).StartAsync();
