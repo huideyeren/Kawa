@@ -51,6 +51,19 @@ public sealed class MagicOnionTransportTests
         Assert.Equal(["Tenryu-1", "Tenryu-2"], values);
     }
 
+    [Fact]
+    public async Task GeneratedClientStreamingAdapter_ConsumesAllRequests()
+    {
+        using var host = await CreateHostAsync(services => services.AddSingleton<IClientStreamingUseCase<int, int>, SumUseCase>());
+        using var channel = Grpc.Net.Client.GrpcChannel.ForAddress("http://localhost", new Grpc.Net.Client.GrpcChannelOptions { HttpHandler = host.GetTestServer().CreateHandler() });
+        var client = MagicOnionClient.Create<Generated.ISumMagicOnionService>(channel);
+        var stream = await client.SumAsync();
+        await stream.RequestStream.WriteAsync(1);
+        await stream.RequestStream.WriteAsync(2);
+        await stream.RequestStream.CompleteAsync();
+        Assert.Equal(3, await stream.ResponseAsync);
+    }
+
     [KawaMagicOnionService("echo")]
     public sealed class EchoUseCase : IUseCase<string, string>
     {
@@ -67,6 +80,13 @@ public sealed class MagicOnionTransportTests
             yield return KawaResult<string>.Success(request + "-2");
             await Task.CompletedTask;
         }
+    }
+
+    [KawaMagicOnionService("sum")]
+    public sealed class SumUseCase : IClientStreamingUseCase<int, int>
+    {
+        public async Task<KawaResult<int>> ExecuteAsync(IAsyncEnumerable<int> requests, CancellationToken cancellationToken = default)
+        { var sum = 0; await foreach (var value in requests) sum += value; return KawaResult<int>.Success(sum); }
     }
 
     private static Task<IHost> CreateHostAsync(Action<IServiceCollection> configure) => new HostBuilder().ConfigureWebHost(webHost => webHost.UseTestServer().ConfigureServices(services => { services.AddKawaMagicOnion(); configure(services); }).Configure(app => app.UseRouting().UseEndpoints(endpoints => endpoints.MapKawaMagicOnionServices()))).StartAsync();
