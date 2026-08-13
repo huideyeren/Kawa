@@ -24,6 +24,8 @@ projects=(
   "src/Kawa.FSharp/Kawa.FSharp.fsproj"
   "src/Kawa.MagicOnion/Kawa.MagicOnion.csproj"
   "src/Kawa.MagicOnion.Generators/Kawa.MagicOnion.Generators.csproj"
+  "src/Kawa.Grpc/Kawa.Grpc.csproj"
+  "src/Kawa.Grpc.ProtoAdapter/Kawa.Grpc.ProtoAdapter.csproj"
 )
 
 test_projects=(
@@ -31,6 +33,7 @@ test_projects=(
   "tests/Kawa.Web.Tests/Kawa.Web.Tests.csproj"
   "tests/Kawa.MagicOnion.Tests/Kawa.MagicOnion.Tests.csproj"
   "tests/Kawa.MagicOnion.Generators.Tests/Kawa.MagicOnion.Generators.Tests.csproj"
+  "tests/Kawa.Grpc.Tests/Kawa.Grpc.Tests.csproj"
 )
 
 for project in "${projects[@]}" "${test_projects[@]}"; do
