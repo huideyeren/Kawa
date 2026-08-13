@@ -50,6 +50,7 @@ public sealed class KawaMagicOnionGeneratorTests
         Assert.Contains("global::System.Threading.Tasks.ValueTask HandleAsync(string clientEvent)", generated);
         Assert.Contains("interface IChatMagicOnionHubReceiver", generated);
         Assert.Contains("void OnEvent(int serverEvent)", generated);
+        Assert.Contains("#nullable enable", generated);
     }
 
     /// <summary>

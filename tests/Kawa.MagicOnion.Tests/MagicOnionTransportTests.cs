@@ -77,6 +77,22 @@ public sealed class MagicOnionTransportTests
         Assert.Equal("Tenryu", stream.ResponseStream.Current);
     }
 
+    [Fact]
+    public async Task GeneratedStreamingHubAdapter_BroadcastsTypedEventsToJoinedClients()
+    {
+        using var host = await CreateHostAsync(services => services.AddSingleton<IStreamingHubUseCase<string, string>, ChatHubUseCase>());
+        using var channel = Grpc.Net.Client.GrpcChannel.ForAddress("http://localhost", new Grpc.Net.Client.GrpcChannelOptions { HttpHandler = host.GetTestServer().CreateHandler() });
+        var firstReceiver = new ChatHubReceiver();
+        var secondReceiver = new ChatHubReceiver();
+        await using var first = await StreamingHubClient.ConnectAsync<Generated.IChatMagicOnionHub, Generated.IChatMagicOnionHubReceiver>(channel, firstReceiver);
+        await using var second = await StreamingHubClient.ConnectAsync<Generated.IChatMagicOnionHub, Generated.IChatMagicOnionHubReceiver>(channel, secondReceiver);
+
+        await first.HandleAsync("Tenryu");
+
+        Assert.Equal("Tenryu", await firstReceiver.Event.Task.WaitAsync(TimeSpan.FromSeconds(5)));
+        Assert.Equal("Tenryu", await secondReceiver.Event.Task.WaitAsync(TimeSpan.FromSeconds(5)));
+    }
+
     [KawaMagicOnionService("echo")]
     public sealed class EchoUseCase : IUseCase<string, string>
     {
@@ -107,6 +123,20 @@ public sealed class MagicOnionTransportTests
     {
         public async IAsyncEnumerable<KawaResult<string>> ExecuteAsync(IAsyncEnumerable<string> requests, [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default)
         { await foreach (var value in requests) yield return KawaResult<string>.Success(value); }
+    }
+
+    [KawaMagicOnionHub("chat")]
+    public sealed class ChatHubUseCase : IStreamingHubUseCase<string, string>
+    {
+        public Task OnConnectedAsync(IKawaHubSession<string> session, CancellationToken cancellationToken = default) => session.JoinGroupAsync("tenryu", cancellationToken);
+        public Task HandleAsync(string clientEvent, IKawaHubSession<string> session, CancellationToken cancellationToken = default) => session.BroadcastToGroupAsync("tenryu", clientEvent, cancellationToken);
+        public Task OnDisconnectedAsync(IKawaHubSession<string> session, Exception? exception, CancellationToken cancellationToken = default) => Task.CompletedTask;
+    }
+
+    private sealed class ChatHubReceiver : Generated.IChatMagicOnionHubReceiver
+    {
+        public TaskCompletionSource<string> Event { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public void OnEvent(string serverEvent) => Event.TrySetResult(serverEvent);
     }
 
     private static Task<IHost> CreateHostAsync(Action<IServiceCollection> configure) => new HostBuilder().ConfigureWebHost(webHost => webHost.UseTestServer().ConfigureServices(services => { services.AddKawaMagicOnion(); configure(services); }).Configure(app => app.UseRouting().UseEndpoints(endpoints => endpoints.MapKawaMagicOnionServices()))).StartAsync();
