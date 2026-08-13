@@ -16,4 +16,13 @@ public sealed class KawaProtoBuildIntegrationTests
     {
         Assert.True(typeof(Kawa.Grpc.BuildFixture.Proto.Chat.ChatBase).IsAbstract);
     }
+
+    /// <summary>
+    /// Ensures Kawa emits a concrete server adapter for the annotated unary use case.
+    /// </summary>
+    [Fact]
+    public void BuildFixture_CompilesGeneratedUnaryAdapter()
+    {
+        Assert.True(typeof(Kawa.Grpc.BuildFixture.Generated.SendGrpcAdapter).IsSealed);
+    }
 }

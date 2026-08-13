@@ -11,7 +11,9 @@ public sealed class SendUseCase : IUseCase<SendRequest, SendResponse>
 {
     /// <inheritdoc />
     public Task<KawaResult<SendResponse>> ExecuteAsync(SendRequest request, CancellationToken cancellationToken = default)
-        => Task.FromResult(KawaResult<SendResponse>.Success(new SendResponse { Accepted = true }));
+        => Task.FromResult(request.Message == "Tenryu"
+            ? KawaResult<SendResponse>.Success(new SendResponse { Accepted = true })
+            : KawaResult<SendResponse>.Failure(new KawaError(KawaErrorKind.Validation, "Message must be Tenryu.")));
 }
 
 /// <summary>

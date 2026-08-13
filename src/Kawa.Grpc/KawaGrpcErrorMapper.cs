@@ -43,6 +43,22 @@ public static class KawaGrpcErrorMapper
             error.Message,
             JsonSerializer.SerializeToUtf8Bytes(error, ErrorJsonOptions));
     }
+
+    /// <summary>
+    /// Converts a Kawa error into the exception shape expected by standard gRPC handlers.
+    /// </summary>
+    /// <param name="error">The predictable application error to terminate the RPC with.</param>
+    /// <returns>An exception with the mapped gRPC status and <c>kawa-error-bin</c> trailer.</returns>
+    public static RpcException ToRpcException(KawaError error)
+    {
+        var mapped = Map(error);
+        var trailers = new Metadata
+        {
+            { "kawa-error-bin", mapped.KawaErrorJson },
+        };
+
+        return new RpcException(new Status(mapped.StatusCode, mapped.Detail), trailers);
+    }
 }
 
 /// <summary>

@@ -25,4 +25,17 @@ public sealed class KawaGrpcErrorMapperTests
         Assert.Equal(error.Message, mapped.Detail);
         Assert.Contains("Unavailable", Encoding.UTF8.GetString(mapped.KawaErrorJson));
     }
+
+    /// <summary>
+    /// Ensures a mapped error can terminate a standard gRPC call with its portable trailer.
+    /// </summary>
+    [Fact]
+    public void ToRpcException_PreservesStatusAndKawaTrailer()
+    {
+        var exception = KawaGrpcErrorMapper.ToRpcException(new KawaError(KawaErrorKind.Validation, "Message is required."));
+
+        Assert.Equal(StatusCode.InvalidArgument, exception.StatusCode);
+        var trailer = exception.Trailers.Single(entry => entry.Key == "kawa-error-bin");
+        Assert.Contains("Validation", Encoding.UTF8.GetString(trailer.ValueBytes));
+    }
 }
