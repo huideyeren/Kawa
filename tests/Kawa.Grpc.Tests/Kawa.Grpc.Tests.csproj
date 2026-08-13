@@ -2,7 +2,9 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Kawa.Grpc\Kawa.Grpc.csproj" />
+    <ProjectReference Include="..\..\src\Kawa.Grpc.Generators\Kawa.Grpc.Generators.csproj" />
     <ProjectReference Include="..\..\src\Kawa.Grpc.ProtoAdapter\Kawa.Grpc.ProtoAdapter.csproj" />
+    <ProjectReference Include="..\Kawa.Grpc.BuildFixture\Kawa.Grpc.BuildFixture.csproj" />
   </ItemGroup>
 
   <ItemGroup>

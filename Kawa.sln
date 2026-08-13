@@ -45,6 +45,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Kawa.Grpc.ProtoAdapter", "s
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Kawa.Grpc.Tests", "tests\Kawa.Grpc.Tests\Kawa.Grpc.Tests.csproj", "{65E6D64D-69C2-49D4-BD1A-D6C3533A6AB4}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Kawa.Grpc.Generators", "src\Kawa.Grpc.Generators\Kawa.Grpc.Generators.csproj", "{B496371E-C8B9-4304-9D72-F66003DDB6A9}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -247,6 +249,10 @@ Global
 		{65E6D64D-69C2-49D4-BD1A-D6C3533A6AB4}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{65E6D64D-69C2-49D4-BD1A-D6C3533A6AB4}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{65E6D64D-69C2-49D4-BD1A-D6C3533A6AB4}.Release|Any CPU.Build.0 = Release|Any CPU
+		{B496371E-C8B9-4304-9D72-F66003DDB6A9}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{B496371E-C8B9-4304-9D72-F66003DDB6A9}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{B496371E-C8B9-4304-9D72-F66003DDB6A9}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{B496371E-C8B9-4304-9D72-F66003DDB6A9}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -270,5 +276,6 @@ Global
 		{BCEBD5F4-4E2D-4DE3-91F4-EC45AF48566E} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
 		{0A9BFA0C-10CE-4FDE-8A72-9F56F59AD52B} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
 		{65E6D64D-69C2-49D4-BD1A-D6C3533A6AB4} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
+		{B496371E-C8B9-4304-9D72-F66003DDB6A9} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
 	EndGlobalSection
 EndGlobal

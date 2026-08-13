@@ -25,6 +25,7 @@ projects=(
   "src/Kawa.MagicOnion/Kawa.MagicOnion.csproj"
   "src/Kawa.MagicOnion.Generators/Kawa.MagicOnion.Generators.csproj"
   "src/Kawa.Grpc/Kawa.Grpc.csproj"
+  "src/Kawa.Grpc.Generators/Kawa.Grpc.Generators.csproj"
   "src/Kawa.Grpc.ProtoAdapter/Kawa.Grpc.ProtoAdapter.csproj"
 )
 
