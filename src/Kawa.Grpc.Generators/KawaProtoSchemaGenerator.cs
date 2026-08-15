@@ -62,10 +62,14 @@ public static class KawaProtoSchemaGenerator
             schema.AppendLine();
         }
 
-        foreach (var service in services.OrderBy(static service => service.Name, StringComparer.Ordinal))
+        foreach (var group in services.GroupBy(static service => service.Name, StringComparer.Ordinal).OrderBy(static group => group.Key, StringComparer.Ordinal))
         {
-            schema.Append("service ").Append(service.Name).AppendLine(" {");
-            schema.Append("  rpc ").Append(service.OperationName).Append('(').Append(service.Request.Name).Append(") returns (").Append(service.Response.Name).AppendLine(");");
+            schema.Append("service ").Append(group.Key).AppendLine(" {");
+            foreach (var service in group.OrderBy(static service => service.OperationName, StringComparer.Ordinal))
+            {
+                schema.Append("  rpc ").Append(service.OperationName).Append('(').Append(service.Kind is KawaGrpcOperationKind.ClientStreaming or KawaGrpcOperationKind.DuplexStreaming ? "stream " : string.Empty).Append(service.Request.Name).Append(") returns (").Append(service.Kind is KawaGrpcOperationKind.ServerStreaming or KawaGrpcOperationKind.DuplexStreaming ? "stream " : string.Empty).Append(service.Response.Name).AppendLine(");");
+            }
+
             schema.AppendLine("}");
             schema.AppendLine();
         }
@@ -105,7 +109,7 @@ public static class KawaProtoSchemaGenerator
 public sealed class KawaProtoSchemaGenerationTask : Microsoft.Build.Utilities.Task
 {
     private static readonly Regex ServiceExpression = new(
-        "\\[KawaProtoService\\(\\\"(?<service>[^\\\"]+)\\\"\\)\\]\\s*public\\s+(?:sealed\\s+)?class\\s+(?<useCase>\\w+)\\s*:\\s*IUseCase<(?<request>\\w+),\\s*(?<response>\\w+)>",
+        "\\[KawaProtoService\\(\\\"(?<service>[^\\\"]+)\\\"\\)\\]\\s*public\\s+(?:sealed\\s+)?class\\s+(?<useCase>\\w+)\\s*:\\s*I(?<contract>UseCase|ServerStreamingUseCase|ClientStreamingUseCase|DuplexStreamingUseCase)<(?<request>\\w+),\\s*(?<response>\\w+)>",
         RegexOptions.Compiled | RegexOptions.CultureInvariant);
     private static readonly Regex ContractExpression = new(
         "public\\s+(?:sealed\\s+)?class\\s+(?<name>\\w+)\\s*\\{(?<body>.*?)\\}",
@@ -268,46 +272,176 @@ public sealed class KawaProtoSchemaGenerationTask : Microsoft.Build.Utilities.Ta
         source.Append("namespace ").Append(ProjectNamespace).AppendLine(".Generated;");
         source.AppendLine();
 
-        foreach (var service in services.OrderBy(static service => service.Name, StringComparer.Ordinal))
+        foreach (var group in services.GroupBy(static service => service.Name, StringComparer.Ordinal).OrderBy(static group => group.Key, StringComparer.Ordinal))
         {
-            var adapterName = service.OperationName + "GrpcAdapter";
-            var requestType = ProjectNamespace + "." + service.Request.Name;
-            var responseType = ProjectNamespace + "." + service.Response.Name;
-            var protoRequestType = CSharpNamespace + "." + service.Request.Name;
-            var protoResponseType = CSharpNamespace + "." + service.Response.Name;
-            source.Append("public sealed class ").Append(adapterName).Append(" : global::").Append(CSharpNamespace).Append('.').Append(service.Name).Append(".").Append(service.Name).AppendLine("Base");
+            var operations = group.OrderBy(static service => service.OperationName, StringComparer.Ordinal).ToArray();
+            var adapterName = group.Key + "GrpcAdapter";
+            source.Append("public sealed class ").Append(adapterName).Append(" : global::").Append(CSharpNamespace).Append('.').Append(group.Key).Append('.').Append(group.Key).AppendLine("Base");
             source.AppendLine("{");
-            source.Append("    private readonly global::Kawa.Abstractions.IUseCase<global::").Append(requestType).Append(", global::").Append(responseType).AppendLine("> _useCase;");
-            source.AppendLine("    private readonly global::Kawa.Core.UseCaseExecutor _executor;");
-            source.Append("    public ").Append(adapterName).Append("(global::Kawa.Abstractions.IUseCase<global::").Append(requestType).Append(", global::").Append(responseType).Append("> useCase, global::Kawa.Core.UseCaseExecutor executor)").AppendLine();
-            source.AppendLine("    {");
-            source.AppendLine("        _useCase = useCase; _executor = executor;");
-            source.AppendLine("    }");
-            source.Append("    public override async global::System.Threading.Tasks.Task<global::").Append(protoResponseType).Append("> ").Append(service.OperationName).Append("(global::").Append(protoRequestType).AppendLine(" request, global::Grpc.Core.ServerCallContext context)");
-            source.AppendLine("    {");
-            source.Append("        var result = await _executor.ExecuteAsync(_useCase, new global::").Append(requestType).AppendLine("()");
-            source.AppendLine("        {");
-            foreach (var field in service.Request.Fields)
+
+            foreach (var operation in operations)
             {
-                source.Append("            ").Append(ToPropertyName(field.Name)).Append(" = request.").Append(ToPropertyName(field.Name)).AppendLine(",");
+                var requestType = ProjectNamespace + "." + operation.Request.Name;
+                var responseType = ProjectNamespace + "." + operation.Response.Name;
+                source.Append("    private readonly global::Kawa.Abstractions.I").Append(GetUseCaseContractName(operation.Kind)).Append("<global::").Append(requestType).Append(", global::").Append(responseType).Append("> _").Append(ToFieldName(operation.OperationName)).AppendLine("UseCase;");
+                source.Append("    private readonly global::Kawa.Core.").Append(GetExecutorName(operation.Kind)).Append(" _").Append(ToFieldName(operation.OperationName)).AppendLine("Executor;");
             }
 
-            source.AppendLine("        }, context.CancellationToken).ConfigureAwait(false);");
-            source.AppendLine("        if (result.IsFailure) throw global::Kawa.Grpc.KawaGrpcErrorMapper.ToRpcException(result.Error!);");
-            source.Append("        return new global::").Append(protoResponseType).AppendLine("()");
-            source.AppendLine("        {");
-            foreach (var field in service.Response.Fields)
+            source.Append("    public ").Append(adapterName).Append('(');
+            source.Append(string.Join(", ", operations.Select(operation => "global::Kawa.Abstractions.I" + GetUseCaseContractName(operation.Kind) + "<global::" + ProjectNamespace + "." + operation.Request.Name + ", global::" + ProjectNamespace + "." + operation.Response.Name + "> " + ToFieldName(operation.OperationName) + "UseCase, global::Kawa.Core." + GetExecutorName(operation.Kind) + " " + ToFieldName(operation.OperationName) + "Executor")));
+            source.AppendLine(")");
+            source.AppendLine("    {");
+            foreach (var operation in operations)
             {
-                source.Append("            ").Append(ToPropertyName(field.Name)).Append(" = result.Value!.").Append(ToPropertyName(field.Name)).AppendLine(",");
+                var fieldName = ToFieldName(operation.OperationName);
+                source.Append("        _").Append(fieldName).Append("UseCase = ").Append(fieldName).AppendLine("UseCase;");
+                source.Append("        _").Append(fieldName).Append("Executor = ").Append(fieldName).AppendLine("Executor;");
+            }
+            source.AppendLine("    }");
+
+            foreach (var operation in operations)
+            {
+                var requestType = ProjectNamespace + "." + operation.Request.Name;
+                var protoRequestType = CSharpNamespace + "." + operation.Request.Name;
+                var protoResponseType = CSharpNamespace + "." + operation.Response.Name;
+                var fieldName = ToFieldName(operation.OperationName);
+                if (operation.Kind == KawaGrpcOperationKind.Unary)
+                {
+                    RenderUnaryAdapter(source, operation, requestType, protoRequestType, protoResponseType, "_" + fieldName + "UseCase", "_" + fieldName + "Executor");
+                }
+                else
+                {
+                    RenderStreamingAdapter(source, operation, requestType, protoRequestType, protoResponseType, "_" + fieldName + "UseCase", "_" + fieldName + "Executor");
+                }
             }
 
-            source.AppendLine("        };");
-            source.AppendLine("    }");
             source.AppendLine("}");
             source.AppendLine();
         }
 
         return source.ToString();
+    }
+
+    private static void RenderUnaryAdapter(StringBuilder source, KawaProtoServiceDefinition service, string requestType, string protoRequestType, string protoResponseType, string useCaseField, string executorField)
+    {
+        source.Append("    public override async global::System.Threading.Tasks.Task<global::").Append(protoResponseType).Append("> ").Append(service.OperationName).Append("(global::").Append(protoRequestType).AppendLine(" request, global::Grpc.Core.ServerCallContext context)");
+        source.AppendLine("    {");
+        source.Append("        var result = await ").Append(executorField).Append(".ExecuteAsync(").Append(useCaseField).Append(", new global::").Append(requestType).AppendLine("()");
+        source.AppendLine("        {");
+        foreach (var field in service.Request.Fields)
+        {
+            source.Append("            ").Append(ToPropertyName(field.Name)).Append(" = request.").Append(ToPropertyName(field.Name)).AppendLine(",");
+        }
+
+        source.AppendLine("        }, context.CancellationToken).ConfigureAwait(false);");
+        source.AppendLine("        if (result.IsFailure) throw global::Kawa.Grpc.KawaGrpcErrorMapper.ToRpcException(result.Error!);");
+        AppendResponseReturn(source, service, protoResponseType);
+        source.AppendLine("    }");
+    }
+
+    private static void RenderStreamingAdapter(
+        StringBuilder source,
+        KawaProtoServiceDefinition service,
+        string requestType,
+        string protoRequestType,
+        string protoResponseType,
+        string useCaseField,
+        string executorField)
+    {
+        switch (service.Kind)
+        {
+            case KawaGrpcOperationKind.ServerStreaming:
+                source.Append("    public override async global::System.Threading.Tasks.Task ").Append(service.OperationName).Append("(global::").Append(protoRequestType).Append(" request, global::Grpc.Core.IServerStreamWriter<global::").Append(protoResponseType).AppendLine("> responseStream, global::Grpc.Core.ServerCallContext context)");
+                source.AppendLine("    {");
+                source.Append("        var contract = new global::").Append(requestType).AppendLine("()");
+                AppendRequestInitializer(source, service);
+                source.Append("        await foreach (var result in ").Append(executorField).Append(".ExecuteAsync(").Append(useCaseField).Append(", contract, context.CancellationToken))").AppendLine();
+                source.AppendLine("        {");
+                source.AppendLine("            if (result.IsFailure) throw global::Kawa.Grpc.KawaGrpcErrorMapper.ToRpcException(result.Error!);");
+                AppendWriteResponse(source, service, protoResponseType);
+                source.AppendLine("        }");
+                source.AppendLine("    }");
+                break;
+
+            case KawaGrpcOperationKind.ClientStreaming:
+                source.Append("    public override async global::System.Threading.Tasks.Task<global::").Append(protoResponseType).Append("> ").Append(service.OperationName).Append("(global::Grpc.Core.IAsyncStreamReader<global::").Append(protoRequestType).AppendLine("> requestStream, global::Grpc.Core.ServerCallContext context)");
+                source.AppendLine("    {");
+                source.Append("        var result = await ").Append(executorField).Append(".ExecuteAsync(").Append(useCaseField).Append(", ReadRequests(requestStream, context.CancellationToken), context.CancellationToken).ConfigureAwait(false);").AppendLine();
+                source.AppendLine("        if (result.IsFailure) throw global::Kawa.Grpc.KawaGrpcErrorMapper.ToRpcException(result.Error!);");
+                AppendResponseReturn(source, service, protoResponseType);
+                source.AppendLine("    }");
+                AppendReadRequests(source, service, requestType, protoRequestType);
+                break;
+
+            case KawaGrpcOperationKind.DuplexStreaming:
+                source.Append("    public override async global::System.Threading.Tasks.Task ").Append(service.OperationName).Append("(global::Grpc.Core.IAsyncStreamReader<global::").Append(protoRequestType).Append("> requestStream, global::Grpc.Core.IServerStreamWriter<global::").Append(protoResponseType).AppendLine("> responseStream, global::Grpc.Core.ServerCallContext context)");
+                source.AppendLine("    {");
+                source.Append("        await foreach (var result in ").Append(executorField).Append(".ExecuteAsync(").Append(useCaseField).Append(", ReadRequests(requestStream, context.CancellationToken), context.CancellationToken))").AppendLine();
+                source.AppendLine("        {");
+                source.AppendLine("            if (result.IsFailure) throw global::Kawa.Grpc.KawaGrpcErrorMapper.ToRpcException(result.Error!);");
+                AppendWriteResponse(source, service, protoResponseType);
+                source.AppendLine("        }");
+                source.AppendLine("    }");
+                AppendReadRequests(source, service, requestType, protoRequestType);
+                break;
+
+            default:
+                throw new ArgumentOutOfRangeException(nameof(service));
+        }
+    }
+
+    private static void AppendRequestInitializer(StringBuilder source, KawaProtoServiceDefinition service)
+    {
+        source.AppendLine("        {");
+        foreach (var field in service.Request.Fields)
+        {
+            source.Append("            ").Append(ToPropertyName(field.Name)).Append(" = request.").Append(ToPropertyName(field.Name)).AppendLine(",");
+        }
+
+        source.AppendLine("        };");
+    }
+
+    private static void AppendResponseReturn(StringBuilder source, KawaProtoServiceDefinition service, string protoResponseType)
+    {
+        source.Append("        return new global::").Append(protoResponseType).AppendLine("()");
+        source.AppendLine("        {");
+        foreach (var field in service.Response.Fields)
+        {
+            source.Append("            ").Append(ToPropertyName(field.Name)).Append(" = result.Value!.").Append(ToPropertyName(field.Name)).AppendLine(",");
+        }
+
+        source.AppendLine("        };");
+    }
+
+    private static void AppendWriteResponse(StringBuilder source, KawaProtoServiceDefinition service, string protoResponseType)
+    {
+        source.Append("            await responseStream.WriteAsync(new global::").Append(protoResponseType).AppendLine("()");
+        source.AppendLine("            {");
+        foreach (var field in service.Response.Fields)
+        {
+            source.Append("                ").Append(ToPropertyName(field.Name)).Append(" = result.Value!.").Append(ToPropertyName(field.Name)).AppendLine(",");
+        }
+
+        source.AppendLine("            }).ConfigureAwait(false);");
+    }
+
+    private static void AppendReadRequests(StringBuilder source, KawaProtoServiceDefinition service, string requestType, string protoRequestType)
+    {
+        source.AppendLine();
+        source.Append("    private static async global::System.Collections.Generic.IAsyncEnumerable<global::").Append(requestType).Append("> ReadRequests(global::Grpc.Core.IAsyncStreamReader<global::").Append(protoRequestType).AppendLine("> requestStream, [global::System.Runtime.CompilerServices.EnumeratorCancellation] global::System.Threading.CancellationToken cancellationToken)");
+        source.AppendLine("    {");
+        source.AppendLine("        while (await requestStream.MoveNext(cancellationToken).ConfigureAwait(false))");
+        source.AppendLine("        {");
+        source.Append("            yield return new global::").Append(requestType).AppendLine("()");
+        source.AppendLine("            {");
+        foreach (var field in service.Request.Fields)
+        {
+            source.Append("                ").Append(ToPropertyName(field.Name)).Append(" = requestStream.Current.").Append(ToPropertyName(field.Name)).AppendLine(",");
+        }
+
+        source.AppendLine("            };");
+        source.AppendLine("        }");
+        source.AppendLine("    }");
     }
 
     private static IReadOnlyList<KawaProtoServiceDefinition> CreateServiceDefinitions(IEnumerable<ITaskItem> items)
@@ -346,7 +480,8 @@ public sealed class KawaProtoSchemaGenerationTask : Microsoft.Build.Utilities.Ta
                 match.Groups["service"].Value,
                 RemoveUseCaseSuffix(match.Groups["useCase"].Value),
                 contracts[match.Groups["request"].Value],
-                contracts[match.Groups["response"].Value]))
+                contracts[match.Groups["response"].Value],
+                ToOperationKind(match.Groups["contract"].Value)))
             .ToArray();
     }
 
@@ -392,6 +527,33 @@ public sealed class KawaProtoSchemaGenerationTask : Microsoft.Build.Utilities.Ta
         _ => type,
     };
 
+    private static string GetUseCaseContractName(KawaGrpcOperationKind kind) => kind switch
+    {
+        KawaGrpcOperationKind.Unary => "UseCase",
+        KawaGrpcOperationKind.ServerStreaming => "ServerStreamingUseCase",
+        KawaGrpcOperationKind.ClientStreaming => "ClientStreamingUseCase",
+        KawaGrpcOperationKind.DuplexStreaming => "DuplexStreamingUseCase",
+        _ => throw new ArgumentOutOfRangeException(nameof(kind)),
+    };
+
+    private static string GetExecutorName(KawaGrpcOperationKind kind) => kind switch
+    {
+        KawaGrpcOperationKind.Unary => "UseCaseExecutor",
+        KawaGrpcOperationKind.ServerStreaming => "ServerStreamingUseCaseExecutor",
+        KawaGrpcOperationKind.ClientStreaming => "ClientStreamingUseCaseExecutor",
+        KawaGrpcOperationKind.DuplexStreaming => "DuplexStreamingUseCaseExecutor",
+        _ => throw new ArgumentOutOfRangeException(nameof(kind)),
+    };
+
+    private static KawaGrpcOperationKind ToOperationKind(string contract) => contract switch
+    {
+        "UseCase" => KawaGrpcOperationKind.Unary,
+        "ServerStreamingUseCase" => KawaGrpcOperationKind.ServerStreaming,
+        "ClientStreamingUseCase" => KawaGrpcOperationKind.ClientStreaming,
+        "DuplexStreamingUseCase" => KawaGrpcOperationKind.DuplexStreaming,
+        _ => throw new ArgumentOutOfRangeException(nameof(contract)),
+    };
+
     private static string GetRequiredMetadata(ITaskItem item, string metadataName)
     {
         var value = item.GetMetadata(metadataName);
@@ -433,11 +595,39 @@ internal sealed class KawaProtoSchemaException : Exception
 /// <param name="OperationName">The protobuf RPC operation name.</param>
 /// <param name="Request">The request message.</param>
 /// <param name="Response">The response message.</param>
+/// <param name="Kind">The gRPC communication mode for the operation.</param>
 public sealed record KawaProtoServiceDefinition(
     string Name,
     string OperationName,
     KawaProtoMessageDefinition Request,
-    KawaProtoMessageDefinition Response);
+    KawaProtoMessageDefinition Response,
+    KawaGrpcOperationKind Kind = KawaGrpcOperationKind.Unary);
+
+/// <summary>
+/// Identifies the standard gRPC communication mode generated for a Kawa use case.
+/// </summary>
+public enum KawaGrpcOperationKind
+{
+    /// <summary>
+    /// A single request produces a single response.
+    /// </summary>
+    Unary,
+
+    /// <summary>
+    /// A single request produces a response sequence.
+    /// </summary>
+    ServerStreaming,
+
+    /// <summary>
+    /// A request sequence produces a single response.
+    /// </summary>
+    ClientStreaming,
+
+    /// <summary>
+    /// A request sequence produces a response sequence.
+    /// </summary>
+    DuplexStreaming,
+}
 
 /// <summary>
 /// Defines a protobuf message derived from a Kawa contract.

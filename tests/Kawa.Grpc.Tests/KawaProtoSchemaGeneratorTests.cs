@@ -34,6 +34,28 @@ public sealed class KawaProtoSchemaGeneratorTests
     }
 
     /// <summary>
+    /// Ensures all Kawa streaming use case contracts retain their direction in the generated protobuf service.
+    /// </summary>
+    [Fact]
+    public void Generate_EmitsStreamingDirectionsForEveryOperationMode()
+    {
+        var request = new KawaProtoMessageDefinition("Request", [new KawaProtoFieldDefinition("message", "string", 1)]);
+        var response = new KawaProtoMessageDefinition("Response", [new KawaProtoFieldDefinition("message", "string", 1)]);
+        var result = KawaProtoSchemaGenerator.Generate(
+            "chat.contracts",
+            [
+                new KawaProtoServiceDefinition("Chat", "Watch", request, response, KawaGrpcOperationKind.ServerStreaming),
+                new KawaProtoServiceDefinition("Chat", "Sum", request, response, KawaGrpcOperationKind.ClientStreaming),
+                new KawaProtoServiceDefinition("Chat", "Echo", request, response, KawaGrpcOperationKind.DuplexStreaming),
+            ]);
+
+        Assert.Empty(result.Diagnostics);
+        Assert.Contains("rpc Watch(Request) returns (stream Response);", result.Schema);
+        Assert.Contains("rpc Sum(stream Request) returns (Response);", result.Schema);
+        Assert.Contains("rpc Echo(stream Request) returns (stream Response);", result.Schema);
+    }
+
+    /// <summary>
     /// Ensures reused field numbers fail schema generation instead of silently changing a protocol.
     /// </summary>
     [Fact]

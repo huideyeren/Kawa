@@ -48,14 +48,85 @@ public sealed class KawaGrpcTransportTests
         Assert.Contains("Validation", System.Text.Encoding.UTF8.GetString(exception.Trailers.Single(entry => entry.Key == "kawa-error-bin").ValueBytes));
     }
 
+    /// <summary>
+    /// Ensures a Kawa server-streaming use case is exposed as a standard gRPC response stream.
+    /// </summary>
+    [Fact]
+    public async Task GeneratedServerStreamingAdapter_StreamsUseCaseResponsesOverGrpc()
+    {
+        using var host = await CreateHostAsync(services => services.AddSingleton<IServerStreamingUseCase<WatchRequest, WatchResponse>, WatchUseCase>());
+        using var channel = GrpcChannel.ForAddress("http://localhost", new GrpcChannelOptions { HttpHandler = host.GetTestServer().CreateHandler() });
+        var client = new Kawa.Grpc.BuildFixture.Proto.Chat.ChatClient(channel);
+
+        using var call = client.Watch(new Kawa.Grpc.BuildFixture.Proto.WatchRequest { Message = "Tenryu" });
+        var messages = new List<string>();
+        while (await call.ResponseStream.MoveNext(CancellationToken.None))
+        {
+            messages.Add(call.ResponseStream.Current.Message);
+        }
+
+        Assert.Equal(["Tenryu-1", "Tenryu-2"], messages);
+    }
+
+    /// <summary>
+    /// Ensures a Kawa client-streaming use case consumes a standard gRPC request stream.
+    /// </summary>
+    [Fact]
+    public async Task GeneratedClientStreamingAdapter_ConsumesRequestsOverGrpc()
+    {
+        using var host = await CreateHostAsync(services => services.AddSingleton<IClientStreamingUseCase<SumRequest, SumResponse>, SumUseCase>());
+        using var channel = GrpcChannel.ForAddress("http://localhost", new GrpcChannelOptions { HttpHandler = host.GetTestServer().CreateHandler() });
+        var client = new Kawa.Grpc.BuildFixture.Proto.Chat.ChatClient(channel);
+
+        using var call = client.Sum();
+        await call.RequestStream.WriteAsync(new Kawa.Grpc.BuildFixture.Proto.SumRequest { Value = 4 });
+        await call.RequestStream.WriteAsync(new Kawa.Grpc.BuildFixture.Proto.SumRequest { Value = 6 });
+        await call.RequestStream.CompleteAsync();
+
+        Assert.Equal(10, (await call.ResponseAsync).Total);
+    }
+
+    /// <summary>
+    /// Ensures a Kawa duplex-streaming use case converts messages in both directions over gRPC.
+    /// </summary>
+    [Fact]
+    public async Task GeneratedDuplexStreamingAdapter_ExchangesMessagesOverGrpc()
+    {
+        using var host = await CreateHostAsync(services => services.AddSingleton<IDuplexStreamingUseCase<EchoRequest, EchoResponse>, EchoStreamUseCase>());
+        using var channel = GrpcChannel.ForAddress("http://localhost", new GrpcChannelOptions { HttpHandler = host.GetTestServer().CreateHandler() });
+        var client = new Kawa.Grpc.BuildFixture.Proto.Chat.ChatClient(channel);
+
+        using var call = client.EchoStream();
+        await call.RequestStream.WriteAsync(new Kawa.Grpc.BuildFixture.Proto.EchoRequest { Message = "first" });
+        await call.RequestStream.WriteAsync(new Kawa.Grpc.BuildFixture.Proto.EchoRequest { Message = "second" });
+        await call.RequestStream.CompleteAsync();
+        var messages = new List<string>();
+        while (await call.ResponseStream.MoveNext(CancellationToken.None))
+        {
+            messages.Add(call.ResponseStream.Current.Message);
+        }
+
+        Assert.Equal(["first", "second"], messages);
+    }
+
     private static Task<IHost> CreateHostAsync(Action<IServiceCollection> configure) => new HostBuilder()
         .ConfigureWebHost(webHost => webHost
             .UseTestServer()
             .ConfigureServices(services =>
             {
                 services.AddKawaGrpc();
+                // One generated adapter owns the complete protobuf service and therefore resolves every operation.
+                // Individual tests can replace the operation they exercise by registering the same contract below.
+                services.AddSingleton<IUseCase<SendRequest, SendResponse>, SendUseCase>();
+                services.AddSingleton<IServerStreamingUseCase<WatchRequest, WatchResponse>, WatchUseCase>();
+                services.AddSingleton<IClientStreamingUseCase<SumRequest, SumResponse>, SumUseCase>();
+                services.AddSingleton<IDuplexStreamingUseCase<EchoRequest, EchoResponse>, EchoStreamUseCase>();
                 configure(services);
             })
-            .Configure(app => app.UseRouting().UseEndpoints(endpoints => endpoints.MapGrpcService<SendGrpcAdapter>())))
+            .Configure(app => app.UseRouting().UseEndpoints(endpoints =>
+            {
+                // gRPC registers every RPC in a generated base type, so one adapter owns each protobuf service.
+                endpoints.MapGrpcService<ChatGrpcAdapter>();
+            })))
         .StartAsync();
 }

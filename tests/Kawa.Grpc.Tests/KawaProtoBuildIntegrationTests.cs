@@ -18,11 +18,17 @@ public sealed class KawaProtoBuildIntegrationTests
     }
 
     /// <summary>
-    /// Ensures Kawa emits a concrete server adapter for the annotated unary use case.
+    /// Ensures Kawa emits one concrete server adapter that owns every annotated operation in its service.
     /// </summary>
     [Fact]
-    public void BuildFixture_CompilesGeneratedUnaryAdapter()
+    public void BuildFixture_CompilesGeneratedServiceAdapter()
     {
-        Assert.True(typeof(Kawa.Grpc.BuildFixture.Generated.SendGrpcAdapter).IsSealed);
+        var adapter = typeof(Kawa.Grpc.BuildFixture.Generated.ChatGrpcAdapter);
+
+        Assert.True(adapter.IsSealed);
+        Assert.NotNull(adapter.GetMethod("Send"));
+        Assert.NotNull(adapter.GetMethod("Watch"));
+        Assert.NotNull(adapter.GetMethod("Sum"));
+        Assert.NotNull(adapter.GetMethod("EchoStream"));
     }
 }
