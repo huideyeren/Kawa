@@ -1,0 +1,6 @@
+syntax = "proto3";
+package legacy.chat;
+option csharp_namespace = "KawaStarter.Server.Legacy";
+service LegacyChat { rpc Send (LegacyRequest) returns (LegacyResponse); }
+message LegacyRequest { string text = 1; }
+message LegacyResponse { string text = 1; }

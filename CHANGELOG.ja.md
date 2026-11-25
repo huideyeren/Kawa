@@ -2,6 +2,40 @@
 
 Kawa の主な変更点をここに記録します。
 
+## [Unreleased]
+
+## [0.5.0] - 2026-11-25
+
+### 追加
+
+- 通信非依存の server/client/duplex streaming、型付き Hub の契約・Executor と、ペイロードを含まない Activity・Meter 計測。
+- MagicOnion のサービス・Hub 生成、4 種の raw RPC、型付き receiver・グループ、生成診断、型付きクライアント factory 登録。
+- `obj/` への protobuf スキーマ生成、サーバーアダプター、型解析による DTO グラフ検出、bytes・enum・入れ子・反復型の変換と、既存 proto の明示的アダプター。
+- 呼び出しごとのスコープ、JSON 標準出力、診断の標準エラー出力、キャンセル、終了コード・テキスト表示の拡張に対応した `Kawa.Cli`。
+- Aspire の ServiceDefaults、ヘルスエンドポイント、サービス検出、AppHost のプロジェクト・参照ヘルパー。
+- NuGet パッケージを参照する 4 種の `dotnet new` テンプレート、通信・Aspire サンプル、`kawa grpc export` ツール、隔離されたパッケージ・テンプレート検証。
+- 独立した .NET 11 SDK・ランタイム互換性 CI。主開発と主 CI は .NET 10 を維持。
+
+### 変更
+
+- Catalog に任意の通信情報を追加し、従来の位置引数コンストラクターと JSON フィールドを維持。明示した非 HTTP 通信と実際の HTTP マッピングを統合。
+- HTTP の追加エラーを OpenAPI と整合し、`Unknown = 5` を含む既存の列挙値を維持。
+
+### 修正
+
+- DTO を共有する操作でも生成 RPC・Hub が正しい実装を解決し、DI の通常の上書き登録を維持。
+- Core のストリームを最初の失敗で終了し、列挙子を破棄。
+- protobuf DTO の全体と型を解析し、未番号・重複・予約番号・未対応メンバーをデータ欠落させず診断。
+- 別の名前空間での生成名衝突を防ぎ、Hub の操作前・非同期完了後にキャンセルを確認。
+- Catalog の経路に MapGroup の接頭辞を含め、Aspire CLI サンプルの Host を開始・停止。
+- 公開前にリポジトリーとパッケージの版、および日付付き日英変更履歴の一致を要求。
+
+### セキュリティ
+
+- MagicOnion に MessagePack 3.1.9 を要求し、Aspire.Hosting を修正版 13.6.5 へ更新（推移依存の下限に MessagePack 2.5.307 を含む）。
+- リリースタグを環境変数経由で検証し、シェルへの入力埋め込みを防止。
+- Unknown・未定義エラーの内部詳細を HTTP、RPC status・trailer、CLI 出力で秘匿。
+
 ## [0.4.0] - 2026-07-31
 
 ### 追加

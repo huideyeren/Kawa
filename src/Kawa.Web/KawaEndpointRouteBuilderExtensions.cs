@@ -81,7 +81,10 @@ public static class KawaEndpointRouteBuilderExtensions
         where TRequest : notnull
     {
         return endpoints.MapKawaPost<TRequest, TResponse>(pattern)
-            .WithKawaUseCaseMetadata(catalogEntry);
+            .WithKawaUseCaseMetadata(catalogEntry is null ? null : catalogEntry with
+            {
+                Transports = [new("http") { Route = pattern, Method = "POST" }],
+            });
     }
 
     private static RouteHandlerBuilder WithKawaPostOpenApiMetadata<TRequest, TResponse>(
@@ -96,6 +99,11 @@ public static class KawaEndpointRouteBuilderExtensions
             .Produces(StatusCodes.Status403Forbidden)
             .Produces<KawaError>(StatusCodes.Status404NotFound, "application/json")
             .Produces<KawaError>(StatusCodes.Status409Conflict, "application/json")
+            .Produces(StatusCodes.Status412PreconditionFailed)
+            .Produces(StatusCodes.Status429TooManyRequests)
+            .Produces(StatusCodes.Status499ClientClosedRequest)
+            .Produces(StatusCodes.Status503ServiceUnavailable)
+            .Produces(StatusCodes.Status504GatewayTimeout)
             .Produces<ProblemDetails>(StatusCodes.Status500InternalServerError, "application/problem+json");
     }
 

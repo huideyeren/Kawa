@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <Sdk Name="Aspire.AppHost.Sdk" Version="13.6.5" />
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+    <OutputType>Exe</OutputType>
+    <IsAspireHost>true</IsAspireHost>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../src/Kawa.Aspire.Hosting/Kawa.Aspire.Hosting.csproj" IsAspireProjectResource="false" />
+    <ProjectReference Include="../Kawa.Sample.Aspire.Service/Kawa.Sample.Aspire.Service.csproj" />
+    <ProjectReference Include="../Kawa.Sample.Aspire.GrpcService/Kawa.Sample.Aspire.GrpcService.csproj" />
+    <ProjectReference Include="../Kawa.Sample.Aspire.Client/Kawa.Sample.Aspire.Client.csproj" />
+
+  </ItemGroup>
+
+</Project>

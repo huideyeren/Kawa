@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\Kawa.Abstractions\Kawa.Abstractions.csproj" />
+    <ProjectReference Include="..\Kawa.Core\Kawa.Core.csproj" />
+    <ProjectReference Include="..\Kawa.MagicOnion.Generators\Kawa.MagicOnion.Generators.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="MagicOnion.Server" Version="7.10.2" />
+    <!-- GHSA-qhrr-8q5h-9q3h: override the vulnerable transitive dependency. -->
+    <PackageReference Include="MessagePack" Version="3.1.9" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <Description>MagicOnion gRPC adapter for Kawa use cases.</Description>
+    <PackageTags>kawa;dotnet;magiconion;grpc;usecase</PackageTags>
+  </PropertyGroup>
+
+</Project>

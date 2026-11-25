@@ -12,11 +12,17 @@ permissions:
 
 jobs:
   build-and-test:
+    name: .NET 10 build and tests
     runs-on: ubuntu-latest
+    env:
+      KAWA_EXPECTED_RUNTIME_MAJOR: '10'
 
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+
+      - name: Check release input safety
+        run: python3 eng/test-release-tag.py
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v6
@@ -50,3 +56,64 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: TestResults/**/coverage.cobertura.xml
           fail_ci_if_error: true
+
+  net11-compatibility:
+    name: .NET 11 SDK and runtime compatibility
+    runs-on: ubuntu-latest
+    env:
+      DOTNET_ROLL_FORWARD: LatestMajor
+      KAWA_EXPECTED_RUNTIME_MAJOR: '11'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup .NET 11
+        id: sdk
+        uses: actions/setup-dotnet@v6
+        env:
+          # Isolate this SDK/runtime from versions preinstalled on the hosted runner.
+          DOTNET_INSTALL_DIR: ${{ runner.temp }}/kawa-dotnet11
+        with:
+          dotnet-version: '11.0.x'
+
+      - name: Select .NET 11 SDK for this job
+        env:
+          KAWA_CI_SDK_VERSION: ${{ steps.sdk.outputs.dotnet-version }}
+          DOTNET_INSTALL_DIR: ${{ runner.temp }}/kawa-dotnet11
+        run: |
+          echo "DOTNET_ROOT=$DOTNET_INSTALL_DIR" >> "$GITHUB_ENV"
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          version = os.environ['KAWA_CI_SDK_VERSION']
+          if not version.startswith('11.0.'):
+              raise SystemExit('Expected a .NET 11 SDK')
+          Path('global.json').write_text(json.dumps({
+              'sdk': {'version': version, 'rollForward': 'disable'}
+          }) + '\n')
+          PY
+          dotnet --info
+          dotnet --list-runtimes
+
+      - name: Restore and audit packages
+        run: |
+          dotnet restore Kawa.sln \
+            -p:NuGetAudit=true \
+            -p:NuGetAuditMode=all \
+            -p:NuGetAuditLevel=low \
+            "-warnaserror:NU1901;NU1902;NU1903;NU1904"
+
+      - name: Build with .NET 11 SDK
+        run: dotnet build Kawa.sln --no-restore
+
+      - name: Test on .NET 11 runtime
+        run: dotnet test Kawa.sln --no-restore --no-build --results-directory TestResults-net11 --logger trx
+
+      - name: Upload .NET 11 test results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: net11-test-results
+          path: TestResults-net11/**/*.trx
+          if-no-files-found: warn

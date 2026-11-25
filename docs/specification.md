@@ -4,7 +4,7 @@
 
 Kawa is a contract-first .NET web framework built as a thin application layer on ASP.NET Core. Kawa centers application flow on request/response contracts and `IUseCase<TRequest,TResponse>` implementations. ASP.NET Core remains responsible for hosting, dependency injection, routing, middleware, authentication, authorization, configuration, logging, and the underlying OpenAPI infrastructure.
 
-The current implemented transport is ASP.NET Core Minimal API integration through `Kawa.Web`. RPC, CLI, and Worker transports are design directions, not implemented package behavior in this repository.
+Kawa 0.5.0 supports HTTP, MagicOnion RPC/StreamingHub, protobuf gRPC and CLI. Worker integration remains future work.
 
 ```mermaid
 flowchart LR
@@ -217,7 +217,81 @@ Public request and response contracts should remain simple .NET types that are n
 
 The current stable behavior is the public API surface in the Kawa packages, the use case execution contract, the documented HTTP result mapping, the API catalog shape, and the OpenAPI integration behavior described above.
 
-Kawa does not currently provide implemented RPC, CLI, Worker, Controller, EF Core, authentication, authorization, validation framework, code generation, or project template packages. Those areas may be explored later, but applications should not depend on them as current Kawa behavior.
+Kawa does not provide Worker, Controller, EF Core, authentication, authorization, or validation framework integrations.
 
 Because Kawa builds on ASP.NET Core, application authors remain responsible for host configuration, middleware ordering, authentication and authorization policies, production documentation exposure, logging, and deployment settings.
 
+
+Unknown and undefined error kinds return HTTP 500 with the fixed detail `An unexpected error occurred.` to avoid exposing internal information. The original error is unchanged. Applications that need diagnostics should log details securely before transport mapping.
+
+RPC adapters also normalize Unknown and undefined kinds to Unknown, replacing both status detail and the kawa-error-bin message with the same generic text. Other known application errors remain public and must not contain secrets.
+
+## CLI Integration
+
+`Kawa.Cli` (0.5.0) depends on Core, Abstractions, System.CommandLine, and DI abstractions; it does not require Kawa.Web. `SetKawaAction(useCase, bindRequest)` binds an explicit unary use case. `SetKawaAction<TRequest,TResponse>(services, bindRequest)` creates and disposes an async DI scope per invocation and resolves the use case, optional `IKawaCliExitCodeMapper`, and optional `IKawaCliTextFormatter<TResponse>` in that scope.
+
+`InvokeKawaAsync(arguments, configuration, cancellationToken)` uses System.CommandLine parsing and invocation. Parse errors go to `configuration.Error` with exit code 1 and no help text on stdout. Explicit help and version actions retain System.CommandLine behavior. Cancellation from invocation, including its console cancellation handling, reaches the executor.
+
+Successful values use `JsonSerializerDefaults.Web` JSON on stdout and exit code 0. Failures use JSON on stderr and exit code 1 by default. A custom exit code mapper must return nonzero. A registered text formatter opts its response type into human-readable output; without a formatter JSON remains the default. Unexpected exceptions and Unknown/undefined error messages are redacted. Known application error messages are public. Applications must log private diagnostics themselves before returning or throwing. Output writers remain owned by the application.
+
+## Aspire integration (0.5.0)
+
+`Kawa.Aspire` is service-side only. `AddKawaAspireDefaults(configuration?)` subscribes OpenTelemetry to `Kawa.*` and `MagicOnion.*` activity/meter names, registers service discovery for HttpClient, and adds the self health check tagged `live`. OTLP export is configured only when `OTEL_EXPORTER_OTLP_ENDPOINT` is present; `OTEL_EXPORTER_OTLP_PROTOCOL` accepts `grpc` or `http/protobuf`. An application explicitly calls `MapKawaAspireHealthChecks()` to expose `/health` (all checks) and `/alive` (checks tagged live).
+
+Core executors emit BCL-only `Kawa.Core` activities and `kawa.usecase.calls` / `kawa.usecase.duration` measurements. Unary, raw streams, and hub lifecycle/event operations are covered. Tags contain use-case type, operation and status; request/response payloads and exception messages are not recorded. Collecting MagicOnion's own source names depends on that transport emitting them; the Kawa executor spans are emitted independently.
+
+`Kawa.Aspire.Hosting` is AppHost-only and requires patched Aspire.Hosting 13.6.5. `AddKawaMagicOnionProject(name, projectPath, targetPort?)` defines a named HTTP/2 grpc endpoint (dynamic target port by default). `AddKawaCliProject(name, projectPath, arguments?)` preserves individual argument tokens. `WithKawaMagicOnionReference(service)` adds discovery and startup dependency. Resource builders retain Aspire's ordinary environment, endpoint and dependency extension methods. Registration does not itself run services.
+
+## Templates, samples and schema export (0.5.0)
+
+`Kawa.Templates` contains four short names: `kawa-cli`, `kawa-magiconion`, `kawa-grpc`, `kawa-aspire`. The `KawaVersion` parameter defaults to 0.5.0. Generated projects target net10.0, reference NuGet packages and contain no paths back to this repository. MagicOnion/protobuf samples demonstrate all raw stream directions; MagicOnion also demonstrates typed hub group broadcast, and protobuf demonstrates explicit legacy schema adapters. The Aspire topology includes MagicOnion/protobuf services and two CLI jobs sharing ServiceDefaults.
+
+`Kawa.Tool` installs the `kawa` command. `kawa grpc export --schema <generated-file> --output <destination>` copies the already built schema explicitly, creates the destination directory if needed, and refuses to overwrite an existing file unless `--force` is present. Normal builds continue to generate only under obj/. See samples/README.md for runnable commands and local prerequisites. Templates and samples are unauthenticated localhost demonstrations, not a deployment security policy.
+
+## 0.5.0 transport contracts
+
+`Kawa.Abstractions` adds `IServerStreamingUseCase`, `IClientStreamingUseCase`, `IDuplexStreamingUseCase`, `IStreamingHubUseCase` and transport-neutral hub session/group interfaces. Core provides the corresponding executors. Streams use `IAsyncEnumerable`; cancellation flows to execution and enumeration. HTTP POST remains unary.
+
+`Kawa.MagicOnion` and its analyzer package generate service contracts, clients and server adapters from marked use cases. Raw RPC supports unary and all three stream directions. Hub adapters use typed receivers and explicit group operations; application state and authorization remain application responsibilities.
+
+`Kawa.Grpc` and `Kawa.Grpc.Generators` generate protobuf schemas under `obj/` and server adapters. Contract fields require explicit stable `[KawaProtoField(number)]` numbers. `Kawa.Grpc.ProtoAdapter` provides `IGrpcProtoAdapter<TProto,TContract>` for explicit conversion of existing schemas. No inferred member mapping is performed. See the runnable samples for complete attribute and service registration examples.
+
+| Error | HTTP | gRPC |
+| --- | --- | --- |
+| Cancelled | 499, empty | Cancelled |
+| DeadlineExceeded | 504, empty | DeadlineExceeded |
+| AlreadyExists | 409, KawaError | AlreadyExists |
+| PreconditionFailed | 412, empty | FailedPrecondition |
+| ResourceExhausted | 429, empty | ResourceExhausted |
+| Unavailable | 503, empty | Unavailable |
+
+Existing numeric enum values remain Validation=0, NotFound=1, Unauthorized=2, Forbidden=3, Conflict=4, Unknown=5. New values occupy 6–11. RPC application failures carry `kawa-error-bin` metadata; Unknown/undefined errors are redacted.
+
+## 0.5.0 catalog extensions
+
+`KawaUseCaseCatalogEntry.Transports` and `KawaApiCatalogUseCase.Transports` are optional lists of `KawaApiCatalogTransport(Kind)`. Existing positional constructors and JSON fields remain. The `transports` field is omitted when absent. HTTP mappings from concrete use cases attach `http`; explicit request/response mappings have no concrete catalog identity.
+
+Applications may explicitly register `KawaUseCaseCatalogEntry` instances with nonempty `Transports` in DI to include active RPC/CLI bindings in `MapKawaApiCatalog`. Entries without transport metadata are still included only when mapped to HTTP. The catalog merges bindings for the same use-case type, request/response types, name and version, deduplicating and sorting transport kinds. It does not infer active bindings from attributes or scan loaded assemblies.
+
+```csharp
+builder.Services.AddSingleton(KawaUseCaseCatalog.FromUseCaseType(typeof(Send)) with
+{
+    Transports = [new("grpc") { Protocol = "protobuf", Service = "Chat", Operation = "Send" }],
+});
+```
+
+For streaming contracts, construct `KawaUseCaseCatalogEntry` explicitly with the element request/response types. `FromUseCaseType` continues to accept exactly one unary contract. Transport descriptors also expose optional `Protocol`, `Route`, `Method`, `Service`, `Operation`, `CommandPath` and `Hub` properties. RPC registrations identify `magicOnion` or `protobuf` in `Protocol`. HTTP mappings populate route/method; non-HTTP bindings supply their own service/operation, command path or hub name. Applications must register only bindings actually exposed by their host.
+
+Development stays on .NET 10; CI additionally executes the net10.0 tests on .NET 11. Actual .NET 11 compatibility is established by that CI job, not by a local .NET 10 build.
+
+## 0.5.0 generator and resolution guarantees
+
+Generated RPC and hub adapters resolve the annotated implementation through `Kawa.Core.KawaUseCaseResolver`, preferring a concrete registration. Existing interface registrations remain supported: the last registration matching that implementation is selected; a different implementation sharing the same DTO pair is never substituted. Resolution uses the request/service scope. Prefer concrete scoped registrations when handlers depend on scoped services or when enumerating all registrations of a contract is undesirable.
+
+Each MagicOnion service generates a typed `Add<Service>MagicOnionClient(services, factory)` extension. The application supplies its client factory and owns the channel lifetime; Kawa registers the generated shared interface without reflection. Invalid/ambiguous contracts, invalid or duplicate generated names, incomplete hub declarations, and unsupported payload kinds produce KAWA5001–5004 errors. Namespaced source hints prevent collisions between equal service names in different namespaces.
+
+Hub session operations observe cancellation before sending or changing membership, and after asynchronous completion. Already issued events cannot be recalled; underlying MagicOnion group APIs do not expose cancellation, so an in-flight group operation is awaited before cancellation is reported.
+
+The protobuf MSBuild task runs after references resolve and before protobuf compilation. It uses a privately bundled Roslyn parser/semantic model, supporting namespace-qualified contracts, aliases, enum values, nested messages, `byte[]`, and arrays/List/IList/ICollection/IEnumerable/IReadOnlyList/IReadOnlyCollection repeated fields. Message types need a public parameterless constructor and public writable fields or public get/set/init properties, each numbered explicitly. Positional records without a parameterless constructor, nullable scalar wrappers, dictionaries, decimal and other unsupported types fail with a KAWA5103 diagnostic rather than being omitted. Missing numbers use KAWA5102; duplicate/reserved/invalid numbers use KAWA5101. Field-number compatibility across published schema versions remains the application's responsibility.
+
+HTTP Catalog routes include MapGroup prefixes from the final route endpoint.

@@ -96,7 +96,7 @@ defines documented contracts:
 
 The documentation UIs are middleware, so map them only where they should be public. The recommended default is development-only; exposing `/swagger` or `/redoc` in production should be an explicit application decision.
 
-Use case metadata and error response attributes are transport-independent. Kawa.Web maps them to OpenAPI, and future RPC / CLI / Worker adapters can use the same API catalog.
+Use case metadata and error response attributes are transport-independent. Kawa.Web maps them to OpenAPI, and explicitly registered RPC / CLI bindings can share the API catalog. Worker integration remains future work.
 
 Then call the endpoint:
 
@@ -213,3 +213,20 @@ See:
 ## License
 
 Kawa is licensed under the MIT License.
+
+### .NET runtime compatibility in CI
+
+The main CI job uses the repository's .NET 10 SDK policy. A separate compatibility job installs an isolated .NET 11 SDK, selects that exact SDK in the job's temporary checkout, builds the existing `net10.0` projects, and runs their tests on the .NET 11 runtime using `DOTNET_ROLL_FORWARD=LatestMajor`. `KAWA_EXPECTED_RUNTIME_MAJOR=11` makes the Core test suite verify the actual runtime major version. This tests runtime compatibility; package target frameworks remain unchanged. The .NET 11 job uploads its TRX results separately and does not replace .NET 10 coverage.
+
+## 0.5 development templates and samples
+
+The development branch includes `kawa-cli`, `kawa-magiconion`, `kawa-grpc`, and `kawa-aspire` templates in `Kawa.Templates`. Templates use published package references; repository samples use project references. See [sample commands and prerequisites](samples/README.md). After the 0.5 package is published:
+
+```sh
+dotnet new install Kawa.Templates::0.5.0
+dotnet new kawa-cli --name MyChat
+```
+
+The `KawaVersion` template parameter defaults to `0.5.0`. Private package smoke tests select the version built from this checkout. To verify template/source synchronization, run `python3 eng/sync-templates.py --check`.
+
+0.5.0 release readiness and remaining blockers: [公開前確認](docs/release-readiness-0.5.0.ja.md).

@@ -26,6 +26,7 @@ public sealed class UseCaseExecutor
             throw new ArgumentNullException(nameof(useCase));
         }
 
-        return useCase.ExecuteAsync(request, cancellationToken);
+        return UseCaseTelemetry.RunAsync(() => useCase.ExecuteAsync(request, cancellationToken),
+            useCase.GetType(), "usecase.execute");
     }
 }

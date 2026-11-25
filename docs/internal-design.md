@@ -122,7 +122,7 @@ flowchart LR
 
 At request time, the endpoint reads `EndpointDataSource`, finds endpoint metadata of type `KawaUseCaseCatalogEntry`, and converts those entries into `KawaApiCatalog`.
 
-This design means the catalog describes mapped endpoints, not every use case registered in dependency injection. A registered use case that is never mapped should not appear in the HTTP catalog.
+The catalog combines mapped HTTP endpoint metadata with explicitly registered DI entries that have nonempty transport metadata; ordinary unmapped registrations remain excluded.
 
 The catalog remains transport-independent because the metadata comes from Kawa use case attributes and Kawa contract types, not from HTTP-specific DTOs.
 
@@ -214,3 +214,21 @@ Use case contracts must remain transport-independent. Do not require use cases t
 
 Future adapter documentation should clearly distinguish implemented package behavior from design direction.
 
+
+For security, singleton use cases must not retain mutable request-specific or user-specific state in fields. Applications requiring scoped dependencies such as DbContext should register the corresponding IUseCase as scoped instead of using assembly scanning.
+
+## CLI execution
+
+CLI actions adapt parsing to unary requests without adding transport types to Core. Direct bindings use the supplied instance; DI bindings own an async scope for each invocation. KawaCliResultWriter serializes or formats the complete value before writing to stdout. Exception handling protects private details and keeps diagnostics on stderr; it does not install global exception or console handlers.
+
+## Aspire and template implementation
+
+Aspire service defaults register instrumentation collectors; Core emits BCL telemetry without referencing Aspire or OpenTelemetry. Stream spans cover enumeration through disposal. Named endpoint references preserve service discovery expressions, and target ports are allocated dynamically unless explicitly set. Template payloads are rendered from repository samples by eng/sync-templates.py and packaged without build output. eng/test-templates.py installs the actual template/tool packages into private directories and compiles generated projects against a private local Kawa feed with cached external dependencies; it does not recursively invoke dotnet test. The analyzer-only and template-only packages do not create empty symbol packages.
+
+## 0.5.0 catalog and compatibility
+
+Catalog combines mapped HTTP metadata with explicitly registered nonempty transport metadata. Deduplication uses implementation/request/response types, name and version; no transport dependency enters Abstractions. Keep existing positional constructors and enum numeric values. Core telemetry uses BCL diagnostics only. RPC and CLI packages depend on Core/Abstractions, not Web.
+
+## Generator implementation fixes
+
+RPC identity resolution is BCL-only and uses the supplied scope. Protobuf source discovery uses Roslyn with resolved ReferencePath inputs; only annotated use cases and reachable DTO graphs are analyzed. Roslyn assemblies are bundled in the build-task tools directory rather than exposed as runtime dependencies. Generated graph conversions explicitly map ByteString, enum numeric values, nullable nested message presence, and repeated elements. Package smoke tests must build fresh consumers to prove task dependency loading and target ordering.

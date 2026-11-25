@@ -13,4 +13,8 @@ public sealed record KawaUseCaseCatalogEntry(
     Type RequestType,
     Type ResponseType,
     KawaUseCaseMetadata Metadata,
-    IReadOnlyList<KawaErrorResponseMetadata> ErrorResponses);
+    IReadOnlyList<KawaErrorResponseMetadata> ErrorResponses)
+{
+    /// <summary>Gets explicitly supplied transport bindings, when available.</summary>
+    public IReadOnlyList<KawaApiCatalogTransport>? Transports { get; init; }
+}

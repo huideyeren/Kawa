@@ -1,0 +1,28 @@
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "KawaStarter.Contracts", "KawaStarter.Contracts\KawaStarter.Contracts.csproj", "{C6FD8083-55D1-5514-B50D-BBC1DE59FF29}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "KawaStarter.Server", "KawaStarter.Server\KawaStarter.Server.csproj", "{4CF93511-675C-5D57-8FFF-AA60A65E239C}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "KawaStarter.Client", "KawaStarter.Client\KawaStarter.Client.csproj", "{070BA729-C7C0-5303-9DDF-B6EBF7BC5C74}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{C6FD8083-55D1-5514-B50D-BBC1DE59FF29}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C6FD8083-55D1-5514-B50D-BBC1DE59FF29}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C6FD8083-55D1-5514-B50D-BBC1DE59FF29}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C6FD8083-55D1-5514-B50D-BBC1DE59FF29}.Release|Any CPU.Build.0 = Release|Any CPU
+		{4CF93511-675C-5D57-8FFF-AA60A65E239C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{4CF93511-675C-5D57-8FFF-AA60A65E239C}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{4CF93511-675C-5D57-8FFF-AA60A65E239C}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{4CF93511-675C-5D57-8FFF-AA60A65E239C}.Release|Any CPU.Build.0 = Release|Any CPU
+		{070BA729-C7C0-5303-9DDF-B6EBF7BC5C74}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{070BA729-C7C0-5303-9DDF-B6EBF7BC5C74}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{070BA729-C7C0-5303-9DDF-B6EBF7BC5C74}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{070BA729-C7C0-5303-9DDF-B6EBF7BC5C74}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+EndGlobal

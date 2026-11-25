@@ -2,6 +2,7 @@ using Kawa.Abstractions;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Kawa.Web;
 
@@ -25,10 +26,15 @@ public static class KawaApiCatalogEndpointRouteBuilderExtensions
 
         endpoints.MapGet(
             pattern,
-            (EndpointDataSource endpointDataSource) =>
+            (EndpointDataSource endpointDataSource, IServiceProvider services) =>
             {
                 var entries = endpointDataSource.Endpoints
-                    .SelectMany(endpoint => endpoint.Metadata.OfType<KawaUseCaseCatalogEntry>());
+                    .SelectMany(endpoint => endpoint.Metadata.OfType<KawaUseCaseCatalogEntry>().Select(entry => entry with
+                    {
+                        Transports = entry.Transports?.Select(transport => transport.Kind == "http" && endpoint is RouteEndpoint route
+                            ? transport with { Route = route.RoutePattern.RawText } : transport).ToArray(),
+                    }))
+                    .Concat(services.GetServices<KawaUseCaseCatalogEntry>().Where(entry => entry.Transports is { Count: > 0 }));
 
                 return Results.Ok(KawaApiCatalog.FromEntries(entries));
             })

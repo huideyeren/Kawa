@@ -14,6 +14,12 @@ public static class KawaUseCaseCatalog
         new(KawaErrorKind.Forbidden, "The caller is not allowed to perform the operation."),
         new(KawaErrorKind.NotFound, "The requested resource was not found."),
         new(KawaErrorKind.Conflict, "The operation conflicts with current application state."),
+        new(KawaErrorKind.Cancelled, "The caller cancelled the operation."),
+        new(KawaErrorKind.DeadlineExceeded, "The operation deadline expired."),
+        new(KawaErrorKind.AlreadyExists, "The resource already exists."),
+        new(KawaErrorKind.PreconditionFailed, "An operation precondition failed."),
+        new(KawaErrorKind.ResourceExhausted, "A resource limit was exhausted."),
+        new(KawaErrorKind.Unavailable, "The service is temporarily unavailable."),
         new(KawaErrorKind.Unknown, "The failure has no more specific application category."),
     ];
 

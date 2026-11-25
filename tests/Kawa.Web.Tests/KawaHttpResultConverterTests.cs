@@ -10,6 +10,21 @@ namespace Kawa.Web.Tests;
 /// </summary>
 public class KawaHttpResultConverterTests
 {
+    /// <summary>Ensures internal error messages remain private.</summary>
+    /// <param name="kind">The internal or undefined error kind.</param>
+    [Theory]
+    [InlineData(KawaErrorKind.Unknown)]
+    [InlineData((KawaErrorKind)999)]
+    public void InternalErrors_DoNotExposeSensitiveDetails(KawaErrorKind kind)
+    {
+        var error = new KawaError(kind, "secret-connection-string");
+        var response = Assert.IsType<Microsoft.AspNetCore.Http.HttpResults.ProblemHttpResult>(
+            KawaHttpResultConverter.ToIResult(KawaResult<string>.Failure(error)));
+        Assert.Equal(500, response.StatusCode);
+        Assert.Equal("An unexpected error occurred.", response.ProblemDetails.Detail);
+        Assert.Equal("secret-connection-string", error.Message);
+    }
+
     /// <summary>
     /// Verifies that successful results become HTTP 200 results.
     /// </summary>
@@ -80,6 +95,12 @@ public class KawaHttpResultConverterTests
         yield return [KawaErrorKind.Forbidden, StatusCodes.Status403Forbidden];
         yield return [KawaErrorKind.NotFound, StatusCodes.Status404NotFound];
         yield return [KawaErrorKind.Conflict, StatusCodes.Status409Conflict];
+        yield return [KawaErrorKind.Cancelled, 499];
+        yield return [KawaErrorKind.DeadlineExceeded, StatusCodes.Status504GatewayTimeout];
+        yield return [KawaErrorKind.AlreadyExists, StatusCodes.Status409Conflict];
+        yield return [KawaErrorKind.PreconditionFailed, StatusCodes.Status412PreconditionFailed];
+        yield return [KawaErrorKind.ResourceExhausted, StatusCodes.Status429TooManyRequests];
+        yield return [KawaErrorKind.Unavailable, StatusCodes.Status503ServiceUnavailable];
         yield return [KawaErrorKind.Unknown, StatusCodes.Status500InternalServerError];
     }
 }

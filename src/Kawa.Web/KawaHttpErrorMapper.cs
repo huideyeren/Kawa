@@ -20,8 +20,14 @@ public sealed class KawaHttpErrorMapper : IErrorMapper<IResult>
             KawaErrorKind.Forbidden => Results.StatusCode(StatusCodes.Status403Forbidden),
             KawaErrorKind.NotFound => Results.NotFound(error),
             KawaErrorKind.Conflict => Results.Conflict(error),
-            KawaErrorKind.Unknown => Results.Problem(error.Message),
-            _ => Results.Problem(error.Message),
+            KawaErrorKind.Cancelled => Results.StatusCode(499),
+            KawaErrorKind.DeadlineExceeded => Results.StatusCode(StatusCodes.Status504GatewayTimeout),
+            KawaErrorKind.AlreadyExists => Results.Conflict(error),
+            KawaErrorKind.PreconditionFailed => Results.StatusCode(StatusCodes.Status412PreconditionFailed),
+            KawaErrorKind.ResourceExhausted => Results.StatusCode(StatusCodes.Status429TooManyRequests),
+            KawaErrorKind.Unavailable => Results.StatusCode(StatusCodes.Status503ServiceUnavailable),
+            KawaErrorKind.Unknown => Results.Problem("An unexpected error occurred."),
+            _ => Results.Problem("An unexpected error occurred."),
         };
     }
 }

@@ -1,0 +1,44 @@
+<Project>
+  <PropertyGroup>
+    <KawaGrpcGeneratorsAssemblyPath Condition="'$(KawaGrpcGeneratorsAssemblyPath)' == ''">$(MSBuildThisFileDirectory)..\tools\net10.0\Kawa.Grpc.Generators.dll</KawaGrpcGeneratorsAssemblyPath>
+  </PropertyGroup>
+
+  <UsingTask TaskName="Kawa.Grpc.Generators.KawaProtoSchemaGenerationTask"
+             AssemblyFile="$(KawaGrpcGeneratorsAssemblyPath)" />
+
+  <PropertyGroup>
+    <KawaProtoPackageName Condition="'$(KawaProtoPackageName)' == ''">$(RootNamespace)</KawaProtoPackageName>
+    <KawaProtoCSharpNamespace Condition="'$(KawaProtoCSharpNamespace)' == ''">$(RootNamespace).Proto</KawaProtoCSharpNamespace>
+    <KawaProtoOutputPath Condition="'$(KawaProtoOutputPath)' == ''">$(IntermediateOutputPath)Kawa\kawa.generated.proto</KawaProtoOutputPath>
+    <KawaGrpcAdapterOutputPath Condition="'$(KawaGrpcAdapterOutputPath)' == ''">$(IntermediateOutputPath)Kawa\KawaGrpcAdapters.g.cs</KawaGrpcAdapterOutputPath>
+  </PropertyGroup>
+
+  <Target Name="KawaGrpcGenerateProto"
+          AfterTargets="ResolveReferences"
+          BeforeTargets="BeforeCompile"
+          DependsOnTargets="ResolveReferences"
+          Condition="'@(Compile)' != '' or '@(KawaProtoService)' != ''">
+    <PropertyGroup>
+      <!-- IntermediateOutputPath is finalized after transitive targets are imported. -->
+      <KawaProtoOutputPath Condition="'$(KawaProtoOutputPath)' == '' or '$(KawaProtoOutputPath)' == 'Kawa\kawa.generated.proto'">$(IntermediateOutputPath)Kawa\kawa.generated.proto</KawaProtoOutputPath>
+      <KawaGrpcAdapterOutputPath Condition="'$(KawaGrpcAdapterOutputPath)' == '' or '$(KawaGrpcAdapterOutputPath)' == 'Kawa\KawaGrpcAdapters.g.cs'">$(IntermediateOutputPath)Kawa\KawaGrpcAdapters.g.cs</KawaGrpcAdapterOutputPath>
+    </PropertyGroup>
+
+    <KawaProtoSchemaGenerationTask PackageName="$(KawaProtoPackageName)"
+                                   CSharpNamespace="$(KawaProtoCSharpNamespace)"
+                                   ProjectNamespace="$(RootNamespace)"
+                                   OutputPath="$(KawaProtoOutputPath)"
+                                   AdapterOutputPath="$(KawaGrpcAdapterOutputPath)"
+                                   ServiceDefinitions="@(KawaProtoService)"
+                                   SourceFiles="@(Compile)"
+                                   ReferenceFiles="@(ReferencePath)">
+      <Output TaskParameter="GeneratedSchemaPath" PropertyName="_KawaProtoGeneratedSchemaPath" />
+      <Output TaskParameter="GeneratedAdapterSourcePath" PropertyName="_KawaGrpcGeneratedAdapterSourcePath" />
+    </KawaProtoSchemaGenerationTask>
+
+    <ItemGroup>
+      <Protobuf Include="$(_KawaProtoGeneratedSchemaPath)" GrpcServices="Both" ProtoRoot="$(IntermediateOutputPath)Kawa" Condition="'$(_KawaProtoGeneratedSchemaPath)' != ''" />
+      <Compile Include="$(_KawaGrpcGeneratedAdapterSourcePath)" Condition="'$(_KawaGrpcGeneratedAdapterSourcePath)' != ''" />
+    </ItemGroup>
+  </Target>
+</Project>
