@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+    <OutputType>Exe</OutputType>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../KawaStarter.Contracts/KawaStarter.Contracts.csproj" />
+    <PackageReference Include="MagicOnion.Client" Version="7.10.2" />
+    <PackageReference Include="Grpc.Net.Client" Version="2.57.0" />
+  </ItemGroup>
+</Project>

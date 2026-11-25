@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Kawa.Core" Version="__KAWA_VERSION__" />
+    <PackageReference Include="Kawa.MagicOnion" Version="__KAWA_VERSION__" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Kawa.MagicOnion.Generators" Version="__KAWA_VERSION__" PrivateAssets="all" />
+  </ItemGroup>
+</Project>

@@ -214,3 +214,21 @@ Use case contract は transport-independent のままにします。Use case に
 
 将来の adapter documentation では、implemented package behavior と design direction を明確に区別してください。
 
+
+セキュリティ上、Singletonのユースケースはリクエスト固有・利用者固有の可変状態をフィールドへ保持しないでください。Scoped依存（DbContextなど）が必要な場合は、アセンブリ走査の代わりに対応するIUseCaseをアプリでScoped登録してください。
+
+## CLI実行
+
+CLIアクションは解析結果をUnaryリクエストへ変換し、Coreへトランスポート型を持ち込みません。直接結線では渡されたインスタンスを使用し、DI結線では各呼び出しの非同期スコープを所有します。KawaCliResultWriterは値全体のJSON化・整形を済ませてから標準出力へ書き込みます。例外処理は内部詳細を秘匿し診断を標準エラーへ出します。グローバル例外ハンドラーやコンソールハンドラーは追加しません。
+
+## Aspireとテンプレートの実装
+
+Aspireのサービス既定値は収集器を登録し、CoreはAspireやOpenTelemetryを参照せずBCLのテレメトリーを出力します。ストリームのSpanは列挙から破棄までを対象とします。名前付きエンドポイント参照はサービス検出の式を保持し、明示しなければターゲットポートを動的に割り当てます。eng/sync-templates.pyがリポジトリのサンプルからテンプレートを生成し、ビルド出力なしでパッケージ化します。eng/test-templates.pyは実際のテンプレート・ツールパッケージを隔離したディレクトリへ導入し、専用ローカルKawaフィードと既存の外部パッケージキャッシュを使って生成物をビルドします。dotnet testは再帰呼び出ししません。Analyzer専用・テンプレート専用パッケージでは空のシンボルパッケージを作成しません。
+
+## 0.5.0 catalog and compatibility
+
+Catalog は HTTP の実マッピングと、通信種別が明示された DI エントリーを統合します。実装型・要求型・応答型・名前・バージョンで識別します。Abstractions に通信ライブラリを持ち込まず、既存コンストラクター・列挙値を維持します。Core の計測は BCL のみを利用し、RPC・CLI は Web に依存しません。
+
+## Generator implementation fixes
+
+RPC の実装解決は BCL と渡されたスコープのみを使います。protobuf のソース検出は解決済み ReferencePath と Roslyn を利用し、属性付きユースケースと到達可能な DTO グラフのみ解析します。Roslyn はビルドタスクの tools ディレクトリーに同梱し、アプリの実行時依存へ公開しません。ByteString、enum の数値、入れ子の null、有り無し、反復要素を明示変換します。新規生成プロジェクトのパッケージ検証で、タスク依存 DLL の読み込みと実行順序を確認します。

@@ -1,0 +1,52 @@
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "KawaStarter.AppHost", "KawaStarter.AppHost\KawaStarter.AppHost.csproj", "{724E028F-1829-5BC8-AC2C-8514E076770B}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "KawaStarter.ServiceDefaults", "KawaStarter.ServiceDefaults\KawaStarter.ServiceDefaults.csproj", "{A3BD859B-8866-545C-AEE2-B86AFC870D6A}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "KawaStarter.Service", "KawaStarter.Service\KawaStarter.Service.csproj", "{12914098-4E34-5A44-B6AC-4940DC6CAE69}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "KawaStarter.GrpcService", "KawaStarter.GrpcService\KawaStarter.GrpcService.csproj", "{56F159DA-CF27-5428-84E3-34F7A290696A}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "KawaStarter.Client", "KawaStarter.Client\KawaStarter.Client.csproj", "{070BA729-C7C0-5303-9DDF-B6EBF7BC5C74}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "KawaStarter.ChatContracts", "KawaStarter.ChatContracts\KawaStarter.ChatContracts.csproj", "{438751B8-3EF6-50A5-B6ED-56EED8DFF3EB}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "KawaStarter.ProtoContracts", "KawaStarter.ProtoContracts\KawaStarter.ProtoContracts.csproj", "{7B31DEBD-DF85-5179-A1CB-41E9EA2A227C}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{724E028F-1829-5BC8-AC2C-8514E076770B}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{724E028F-1829-5BC8-AC2C-8514E076770B}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{724E028F-1829-5BC8-AC2C-8514E076770B}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{724E028F-1829-5BC8-AC2C-8514E076770B}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A3BD859B-8866-545C-AEE2-B86AFC870D6A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A3BD859B-8866-545C-AEE2-B86AFC870D6A}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A3BD859B-8866-545C-AEE2-B86AFC870D6A}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A3BD859B-8866-545C-AEE2-B86AFC870D6A}.Release|Any CPU.Build.0 = Release|Any CPU
+		{12914098-4E34-5A44-B6AC-4940DC6CAE69}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{12914098-4E34-5A44-B6AC-4940DC6CAE69}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{12914098-4E34-5A44-B6AC-4940DC6CAE69}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{12914098-4E34-5A44-B6AC-4940DC6CAE69}.Release|Any CPU.Build.0 = Release|Any CPU
+		{56F159DA-CF27-5428-84E3-34F7A290696A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{56F159DA-CF27-5428-84E3-34F7A290696A}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{56F159DA-CF27-5428-84E3-34F7A290696A}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{56F159DA-CF27-5428-84E3-34F7A290696A}.Release|Any CPU.Build.0 = Release|Any CPU
+		{070BA729-C7C0-5303-9DDF-B6EBF7BC5C74}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{070BA729-C7C0-5303-9DDF-B6EBF7BC5C74}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{070BA729-C7C0-5303-9DDF-B6EBF7BC5C74}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{070BA729-C7C0-5303-9DDF-B6EBF7BC5C74}.Release|Any CPU.Build.0 = Release|Any CPU
+		{438751B8-3EF6-50A5-B6ED-56EED8DFF3EB}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{438751B8-3EF6-50A5-B6ED-56EED8DFF3EB}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{438751B8-3EF6-50A5-B6ED-56EED8DFF3EB}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{438751B8-3EF6-50A5-B6ED-56EED8DFF3EB}.Release|Any CPU.Build.0 = Release|Any CPU
+		{7B31DEBD-DF85-5179-A1CB-41E9EA2A227C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{7B31DEBD-DF85-5179-A1CB-41E9EA2A227C}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{7B31DEBD-DF85-5179-A1CB-41E9EA2A227C}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{7B31DEBD-DF85-5179-A1CB-41E9EA2A227C}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+EndGlobal

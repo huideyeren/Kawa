@@ -109,6 +109,37 @@ public sealed class KawaGrpcTransportTests
         Assert.Equal(["first", "second"], messages);
     }
 
+    /// <summary>Shared DTOs must not redirect an operation to another implementation.</summary>
+    [Fact]
+    public async Task SharedDtoOperations_ResolveTheirOwnImplementations()
+    {
+        using var host = await CreateHostAsync(_ => { });
+        using var channel = GrpcChannel.ForAddress("http://localhost", new GrpcChannelOptions { HttpHandler = host.GetTestServer().CreateHandler() });
+        var client = new Kawa.Grpc.BuildFixture.Proto.Chat.ChatClient(channel);
+        Assert.True((await client.SendAsync(new Kawa.Grpc.BuildFixture.Proto.SendRequest { Message = "Tenryu" })).Accepted);
+        Assert.False((await client.RejectAsync(new Kawa.Grpc.BuildFixture.Proto.SendRequest { Message = "Tenryu" })).Accepted);
+    }
+
+    /// <summary>Bytes, nested messages, enums and repeated fields survive a real RPC round trip.</summary>
+    [Fact]
+    public async Task CompositeContract_RoundTripsEveryField()
+    {
+        using var host = await CreateHostAsync(services => services.AddScoped<RoundTripUseCase>());
+        using var channel = GrpcChannel.ForAddress("http://localhost", new GrpcChannelOptions { HttpHandler = host.GetTestServer().CreateHandler() });
+        var client = new Kawa.Grpc.BuildFixture.Proto.Composite.CompositeClient(channel);
+        var request = new Kawa.Grpc.BuildFixture.Proto.Envelope
+        {
+            Message = "all fields", Payload = Google.Protobuf.ByteString.CopyFrom(new byte[] { 0, 128, 255 }),
+            State = (Kawa.Grpc.BuildFixture.Proto.Delivery)3,
+            Child = new Kawa.Grpc.BuildFixture.Proto.Envelope_Detail { Name = "nested" },
+        };
+        request.Items.Add(new Kawa.Grpc.BuildFixture.Proto.Envelope_Detail { Name = "repeated" });
+        request.Scores.Add(new[] { 1, 2, 3 });
+        request.States.Add((Kawa.Grpc.BuildFixture.Proto.Delivery)3);
+        var response = await client.RoundTripAsync(request);
+        Assert.Equal(request, response);
+    }
+
     private static Task<IHost> CreateHostAsync(Action<IServiceCollection> configure) => new HostBuilder()
         .ConfigureWebHost(webHost => webHost
             .UseTestServer()
@@ -121,12 +152,14 @@ public sealed class KawaGrpcTransportTests
                 services.AddSingleton<IServerStreamingUseCase<WatchRequest, WatchResponse>, WatchUseCase>();
                 services.AddSingleton<IClientStreamingUseCase<SumRequest, SumResponse>, SumUseCase>();
                 services.AddSingleton<IDuplexStreamingUseCase<EchoRequest, EchoResponse>, EchoStreamUseCase>();
+                services.AddSingleton<IUseCase<SendRequest, SendResponse>, RejectUseCase>();
                 configure(services);
             })
             .Configure(app => app.UseRouting().UseEndpoints(endpoints =>
             {
                 // gRPC registers every RPC in a generated base type, so one adapter owns each protobuf service.
                 endpoints.MapGrpcService<ChatGrpcAdapter>();
+                endpoints.MapGrpcService<CompositeGrpcAdapter>();
             })))
         .StartAsync();
 }

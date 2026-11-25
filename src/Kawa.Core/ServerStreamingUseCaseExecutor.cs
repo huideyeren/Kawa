@@ -19,6 +19,7 @@ public sealed class ServerStreamingUseCaseExecutor
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(useCase);
-        return useCase.ExecuteAsync(request, cancellationToken);
+        return UseCaseTelemetry.Stream(() => useCase.ExecuteAsync(request, cancellationToken),
+            useCase.GetType(), "usecase.server_stream", cancellationToken);
     }
 }

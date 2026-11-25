@@ -17,7 +17,8 @@ public sealed class StreamingHubUseCaseExecutor
     {
         ArgumentNullException.ThrowIfNull(useCase);
         ArgumentNullException.ThrowIfNull(session);
-        return useCase.OnConnectedAsync(session, cancellationToken);
+        return UseCaseTelemetry.RunAsync(() => useCase.OnConnectedAsync(session, cancellationToken),
+            useCase.GetType(), "hub.connect");
     }
 
     /// <summary>
@@ -27,7 +28,8 @@ public sealed class StreamingHubUseCaseExecutor
     {
         ArgumentNullException.ThrowIfNull(useCase);
         ArgumentNullException.ThrowIfNull(session);
-        return useCase.HandleAsync(clientEvent, session, cancellationToken);
+        return UseCaseTelemetry.RunAsync(() => useCase.HandleAsync(clientEvent, session, cancellationToken),
+            useCase.GetType(), "hub.handle");
     }
 
     /// <summary>
@@ -37,6 +39,7 @@ public sealed class StreamingHubUseCaseExecutor
     {
         ArgumentNullException.ThrowIfNull(useCase);
         ArgumentNullException.ThrowIfNull(session);
-        return useCase.OnDisconnectedAsync(session, exception, cancellationToken);
+        return UseCaseTelemetry.RunAsync(() => useCase.OnDisconnectedAsync(session, exception, cancellationToken),
+            useCase.GetType(), "hub.disconnect");
     }
 }

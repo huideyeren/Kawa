@@ -10,6 +10,21 @@ namespace Kawa.Web.Tests;
 /// </summary>
 public class KawaHttpResultConverterTests
 {
+    /// <summary>Ensures internal error messages remain private.</summary>
+    /// <param name="kind">The internal or undefined error kind.</param>
+    [Theory]
+    [InlineData(KawaErrorKind.Unknown)]
+    [InlineData((KawaErrorKind)999)]
+    public void InternalErrors_DoNotExposeSensitiveDetails(KawaErrorKind kind)
+    {
+        var error = new KawaError(kind, "secret-connection-string");
+        var response = Assert.IsType<Microsoft.AspNetCore.Http.HttpResults.ProblemHttpResult>(
+            KawaHttpResultConverter.ToIResult(KawaResult<string>.Failure(error)));
+        Assert.Equal(500, response.StatusCode);
+        Assert.Equal("An unexpected error occurred.", response.ProblemDetails.Detail);
+        Assert.Equal("secret-connection-string", error.Message);
+    }
+
     /// <summary>
     /// Verifies that successful results become HTTP 200 results.
     /// </summary>

@@ -25,6 +25,11 @@ public static class KawaMagicOnionErrorMapper
     {
         ArgumentNullException.ThrowIfNull(error);
 
+        if (!Enum.IsDefined(typeof(KawaErrorKind), error.Kind) || error.Kind == KawaErrorKind.Unknown)
+        {
+            error = new KawaError(KawaErrorKind.Unknown, "An unexpected error occurred.");
+        }
+
         return new KawaMagicOnionMappedError(
             error.Kind switch
             {

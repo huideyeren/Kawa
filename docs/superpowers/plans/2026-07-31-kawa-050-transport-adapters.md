@@ -6,7 +6,13 @@
 
 **Architecture:** Keep application contracts and executors in `Kawa.Abstractions`/`Kawa.Core`; ship MagicOnion, protobuf gRPC, CLI, and Aspire as independent adapters. An incremental generator emits MagicOnion contracts, while an MSBuild task emits Kawa-originated protobuf schemas before `Grpc.Tools` runs. Existing protobuf applications use explicit adapters rather than inferred member mapping. New transports add catalog metadata but do not change current HTTP behavior.
 
-**Tech Stack:** .NET 10, MagicOnion.Server 7.10.2, System.CommandLine 2.0.10, .NET Aspire 13.4.6, xUnit, Roslyn incremental generators, ASP.NET Core TestHost.
+**Tech Stack:** .NET 10, MagicOnion.Server 7.10.2, System.CommandLine 2.0.10, .NET Aspire 13.6.5, xUnit, Roslyn incremental generators, ASP.NET Core TestHost.
+
+## Security checkpoint (2026-11-19)
+
+Release input injection and internal HTTP/RPC error disclosure are patched locally. The user completed network-enabled restore/audit, which found MessagePack 3.1.7; Kawa.MagicOnion now directly requires patched MessagePack 3.1.9. The user reports no warnings after updating. Local resolved assets confirm MessagePack 3.1.9. The original 99 tests pass through the installed xUnit engine with each test assembly's own deps/runtimeconfig. The user also previously reported 99 passing tests using standard dotnet test.
+
+CLI is Task 7 in this plan (protobuf is Task 6). Resume the remaining tasks in order. Additional CLI tests and runtime compatibility checks are recorded below; none of the above implies that unfinished Aspire/templates/catalog work is complete.
 
 ## Global Constraints
 
@@ -162,11 +168,15 @@ Assert.Contains(diagnostics, diagnostic => diagnostic.Id == "KAWA5101");
 
 **Produces:** commands that write success JSON only to stdout, failures only to stderr, and map failure to exit code 1 unless an `IKawaCliExitCodeMapper` is registered.
 
-- [ ] **Step 1: Write invocation tests with `StringWriter` asserting `{"value":"ok"}` on stdout/0 and a validation error on stderr/1; add a custom mapper test returning 23.**
-- [ ] **Step 2: Run the project tests and confirm compilation fails.**
-- [ ] **Step 3: Implement `Command` extension overloads for unary use cases, JSON serialization with `JsonSerializerDefaults.Web`, and optional text formatter registration.**
-- [ ] **Step 4: Re-run CLI tests and the solution suite; expect PASS.**
+- [x] **Step 1: Write invocation tests with `StringWriter` asserting `{"value":"ok"}` on stdout/0 and a validation error on stderr/1; add a custom mapper test returning 23.**
+- [x] **Step 2: Run the project tests and confirm compilation fails.**
+- [x] **Step 3: Implement `Command` extension overloads for unary use cases, JSON serialization with `JsonSerializerDefaults.Web`, and optional text formatter registration.**
+- [x] **Step 4: Re-run CLI tests and the solution suite; expect PASS.**
 - [ ] **Step 5: Commit `feat: add System.CommandLine integration`.**
+
+**Verification (2026-11-19):** Planned System.CommandLine 2.0.10 restored by the user and confirmed in resolved assets. CLI tests: 13 passed. Full current suite: 113 passed, zero failed/skipped/infrastructure errors through the installed xUnit execution engine with each target deps/runtimeconfig; standard vstest remains blocked locally by socket policy. Full solution build: zero warnings/errors. Local CLI NuGet pack smoke test passed (development metadata still 0.4.0; final release version remains Task 10). No commit yet. Existing security work is preserved.
+
+**CI addition requested by user:** .NET 10 remains the main development SDK/TFM and primary CI job. A separate .NET 11 compatibility job selects an isolated .NET 11 SDK and runs existing net10.0 tests on runtime 11. Runtime assertions detect fallback to the wrong major. YAML and negative runtime-assertion behavior were checked locally; actual .NET 11 execution requires CI and is not claimed as passing. No .NET 12 configuration was added.
 
 ### Task 8: Add Aspire service and hosting integration
 
@@ -176,12 +186,12 @@ Assert.Contains(diagnostics, diagnostic => diagnostic.Id == "KAWA5101");
 - Create: `tests/Kawa.Aspire.Tests/Kawa.Aspire.Tests.csproj`, `KawaAspireDefaultsTests.cs`, `KawaHostingExtensionsTests.cs`
 - Modify: `Kawa.sln`, `eng/pack.sh`
 
-**Produces:** `AddKawaAspireDefaults()`, `/health` and `/alive` mapping, and AppHost extensions `AddKawaMagicOnionProject`/`AddKawaCliProject` using Aspire 13.4.6.
+**Produces:** `AddKawaAspireDefaults()`, `/health` and `/alive` mapping, and AppHost extensions `AddKawaMagicOnionProject`/`AddKawaCliProject` using Aspire 13.6.5.
 
-- [ ] **Step 1: Write tests asserting the service collection contains Kawa/MagicOnion Activity and Meter sources, health endpoints respond, and AppHost resources expose a gRPC endpoint/reference.**
-- [ ] **Step 2: Run Aspire tests; expect missing project/API failures.**
-- [ ] **Step 3: Implement service defaults with OpenTelemetry/service discovery and hosting extensions over `IDistributedApplicationBuilder`.**
-- [ ] **Step 4: Run Aspire tests, then the full solution.**
+- [x] **Step 1: Write tests asserting the service collection contains Kawa/MagicOnion Activity and Meter sources, health endpoints respond, and AppHost resources expose a gRPC endpoint/reference.**
+- [x] **Step 2: Run Aspire tests; expect missing project/API failures.**
+- [x] **Step 3: Implement service defaults with OpenTelemetry/service discovery and hosting extensions over `IDistributedApplicationBuilder`.**
+- [x] **Step 4: Run Aspire tests, then the full solution.**
 - [ ] **Step 5: Commit `feat: add Aspire Kawa integrations`.**
 
 ### Task 9: Add templates and runnable samples
@@ -192,10 +202,10 @@ Assert.Contains(diagnostics, diagnostic => diagnostic.Id == "KAWA5101");
 - Create: `tests/Kawa.Templates.Tests/Kawa.Templates.Tests.csproj`, `TemplateSmokeTests.cs`
 - Modify: `Kawa.sln`, `eng/pack.sh`
 
-- [ ] **Step 1: Write smoke tests that install `Kawa.Templates` from a local package, instantiate each short name, restore, build, and invoke the CLI sample.**
-- [ ] **Step 2: Run template tests; expect missing template/package failures.**
-- [ ] **Step 3: Add the four template manifests and chat-domain samples demonstrating HTTP, all raw gRPC modes, hub groups, CLI JSON, Kawa-originated protobuf schema export, an explicit existing-proto adapter, and Aspire AppHost topology.**
-- [ ] **Step 4: Run each generated project restore/build plus template tests; expect PASS.**
+- [x] **Step 1: Write smoke tests that install `Kawa.Templates` from a local package, instantiate each short name, restore, build, and invoke the CLI sample.**
+- [x] **Step 2: Run template tests; expect missing template/package failures.**
+- [x] **Step 3: Add the four template manifests and chat-domain samples demonstrating HTTP, all raw gRPC modes, hub groups, CLI JSON, Kawa-originated protobuf schema export, an explicit existing-proto adapter, and Aspire AppHost topology.**
+- [x] **Step 4: Run each generated project restore/build plus template tests; expect PASS.**
 - [ ] **Step 5: Commit `feat: add Kawa 0.5 templates and samples`.**
 
 ### Task 10: Enrich catalog, finalize documents, release metadata, and verification
@@ -206,9 +216,9 @@ Assert.Contains(diagnostics, diagnostic => diagnostic.Id == "KAWA5101");
 
 **Produces:** optional catalog `transports` metadata, complete bilingual docs, and version `0.5.0`.
 
-- [ ] **Step 1: Write a catalog serialization regression test asserting existing JSON fields stay unchanged and an HTTP+gRPC entry contains `transports: [{"kind":"http"}, {"kind":"grpc"}]`.**
-- [ ] **Step 2: Run the catalog test and confirm it fails.**
-- [ ] **Step 3: Add optional transport records without removing existing fields; document every public contract, mapping, template, and compatibility promise in both languages; set `<Version>0.5.0</Version>`.**
+- [x] **Step 1: Write a catalog serialization regression test asserting existing JSON fields stay unchanged and an HTTP+gRPC entry contains `transports: [{"kind":"http"}, {"kind":"grpc"}]`.**
+- [x] **Step 2: Run the catalog test and confirm it fails.**
+- [x] **Step 3: Add optional transport records without removing existing fields; document every public contract, mapping, template, and compatibility promise in both languages; set `<Version>0.5.0</Version>`.**
 - [ ] **Step 4: Run `dotnet restore Kawa.sln --disable-build-servers`, `dotnet test Kawa.sln --no-restore --disable-build-servers`, and `bash eng/pack.sh`; inspect all package names and versions.**
 - [ ] **Step 5: Commit `docs: finalize Kawa 0.5.0 transport release`.**
 
@@ -217,3 +227,6 @@ Assert.Contains(diagnostics, diagnostic => diagnostic.Id == "KAWA5101");
 - Spec coverage: Tasks 1-2 cover transport-independent contracts/errors and HTTP compatibility; Tasks 3-5 cover all MagicOnion modes and StreamingHub; Task 6 covers both Kawa-originated and existing-proto protobuf gRPC; Task 7 covers CLI; Task 8 covers both Aspire packages; Task 9 covers all templates/samples; Task 10 covers catalog, bilingual docs, changelog, version, packaging, and regression verification.
 - Placeholder scan: no deferred implementation or unnamed API is present; all planned public types, package versions, test targets, and output behavior are named above.
 - Type consistency: Tasks 2-5 consume the exact contracts produced by Task 1; Tasks 3-5 use the exact generator attributes and runtime extensions defined in the global constraints; Task 7 consumes the runtime package built by Tasks 3-5.
+
+
+**Final fix-pass verification (2026-11-19):** Closed all implementation blockers in the readiness report. Actual xUnit engine: Core37 + Web42 + MagicOnion15 + MagicOnion.Generators11 + Grpc25 + Cli13 + Aspire7 + Templates1 = 151 passed, zero failures/skips/errors. Four freshly generated package-backed templates restore/build; CLI/tool smoke passes. Source/type discovery and private build-task dependencies are exercised by fresh package consumers. Solution Debug build succeeds with the existing sample ASPIRE010 warning. Standard vstest was attempted and failed at socket bind (Permission denied), so normal audited restore, dotnet test and Release eng/pack.sh remain user-terminal gates. .NET11 CI/AppHost runtime remain unverified. No publication or commits performed.

@@ -154,6 +154,10 @@ public sealed class MapKawaPostTests
             .GetProperty("/users")
             .GetProperty("post");
         var responses = operation.GetProperty("responses");
+        foreach (var status in new[] { "412", "429", "499", "503", "504" })
+        {
+            Assert.False(responses.GetProperty(status).TryGetProperty("content", out _));
+        }
 
         Assert.Equal("users.create", operation.GetProperty("operationId").GetString());
         Assert.Equal("Create user", operation.GetProperty("summary").GetString());
@@ -243,6 +247,8 @@ public sealed class MapKawaPostTests
             await client.GetStreamAsync(KawaOpenApiDefaults.ApiCatalogPattern));
 
         var useCase = Assert.Single(document.RootElement.GetProperty("useCases").EnumerateArray());
+        Assert.Equal("http", Assert.Single(useCase.GetProperty("transports").EnumerateArray())
+            .GetProperty("kind").GetString());
         var request = useCase.GetProperty("request");
         var response = useCase.GetProperty("response");
         var errors = useCase.GetProperty("errorResponses");
@@ -327,7 +333,34 @@ public sealed class MapKawaPostTests
             .StartAsync();
     }
 
-    private static async Task<IHost> StartOpenApiHostAsync()
+    /// <summary>Explicit RPC metadata joins actual HTTP mappings in the public catalog.</summary>
+    [Fact]
+    public async Task ApiCatalog_MergesExplicitRpcBindings()
+    {
+        using var host = await StartOpenApiHostAsync(includeRpc: true);
+        using var client = host.GetTestClient();
+        using var document = await JsonDocument.ParseAsync(await client.GetStreamAsync(KawaOpenApiDefaults.ApiCatalogPattern));
+        var entry = Assert.Single(document.RootElement.GetProperty("useCases").EnumerateArray());
+        var transports = entry.GetProperty("transports").EnumerateArray().ToArray();
+        Assert.Equal(2, transports.Length);
+        Assert.Equal("protobuf", transports[0].GetProperty("protocol").GetString());
+        Assert.Equal("Create", transports[0].GetProperty("operation").GetString());
+        Assert.Equal("/users", transports[1].GetProperty("route").GetString());
+        Assert.Equal("POST", transports[1].GetProperty("method").GetString());
+    }
+
+    /// <summary>Catalog routes include the actual MapGroup prefix.</summary>
+    [Fact]
+    public async Task ApiCatalog_RecordsFullGroupedRoute()
+    {
+        using var host = await StartOpenApiHostAsync(grouped: true);
+        using var client = host.GetTestClient();
+        using var document = await JsonDocument.ParseAsync(await client.GetStreamAsync(KawaOpenApiDefaults.ApiCatalogPattern));
+        var entry = Assert.Single(document.RootElement.GetProperty("useCases").EnumerateArray());
+        Assert.Equal("/api/users", entry.GetProperty("transports")[0].GetProperty("route").GetString());
+    }
+
+    private static async Task<IHost> StartOpenApiHostAsync(bool includeRpc = false, bool grouped = false)
     {
         return await new HostBuilder()
             .ConfigureWebHost(webHost =>
@@ -338,6 +371,12 @@ public sealed class MapKawaPostTests
                     services.AddRouting();
                     services.AddKawa();
                     services.AddKawaWeb();
+                    if (includeRpc)
+                        services.AddSingleton(KawaUseCaseCatalog.FromUseCaseType(typeof(ConventionalCreateUser)) with
+                        {
+                            Transports = [new("grpc") { Protocol = "protobuf", Service = "Users", Operation = "Create" }],
+                        });
+
                     services.AddSingleton<
                         IUseCase<ConventionalCreateUser.Request, ConventionalCreateUser.Response>,
                         ConventionalCreateUser>();
@@ -349,7 +388,8 @@ public sealed class MapKawaPostTests
                     app.MapKawaReDoc();
                     app.UseEndpoints(endpoints =>
                     {
-                        endpoints.MapKawaPost<ConventionalCreateUser>("/users");
+                        if (grouped) endpoints.MapGroup("/api").MapKawaPost<ConventionalCreateUser>("/users");
+                        else endpoints.MapKawaPost<ConventionalCreateUser>("/users");
                         endpoints.MapKawaApiCatalog();
                         endpoints.MapKawaOpenApi();
                     });

@@ -1,0 +1,25 @@
+{
+  "$schema": "http://json.schemastore.org/template",
+  "author": "Kawa contributors",
+  "identity": "Kawa.cli.Project",
+  "name": "Kawa cli application",
+  "shortName": "kawa-cli",
+  "classifications": [
+    "Kawa",
+    "cli"
+  ],
+  "sourceName": "KawaStarter",
+  "preferNameDirectory": true,
+  "tags": {
+    "language": "C#",
+    "type": "project"
+  },
+  "symbols": {
+    "KawaVersion": {
+      "type": "parameter",
+      "datatype": "string",
+      "defaultValue": "0.5.0",
+      "replaces": "__KAWA_VERSION__"
+    }
+  }
+}

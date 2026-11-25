@@ -1,0 +1,25 @@
+{
+  "$schema": "http://json.schemastore.org/template",
+  "author": "Kawa contributors",
+  "identity": "Kawa.aspire.Project",
+  "name": "Kawa aspire application",
+  "shortName": "kawa-aspire",
+  "classifications": [
+    "Kawa",
+    "aspire"
+  ],
+  "sourceName": "KawaStarter",
+  "preferNameDirectory": true,
+  "tags": {
+    "language": "C#",
+    "type": "project"
+  },
+  "symbols": {
+    "KawaVersion": {
+      "type": "parameter",
+      "datatype": "string",
+      "defaultValue": "0.5.0",
+      "replaces": "__KAWA_VERSION__"
+    }
+  }
+}

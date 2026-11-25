@@ -5,6 +5,7 @@ using System.Linq;
 using System.Text;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.Text;
 
 namespace Kawa.MagicOnion.Generators;
@@ -27,6 +28,8 @@ public sealed class KawaMagicOnionGenerator : IIncrementalGenerator
     /// <inheritdoc />
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
+        RegisterDiagnostics(context, ServiceAttributeName, false);
+        RegisterDiagnostics(context, HubAttributeName, true);
         var useCases = context.SyntaxProvider.ForAttributeWithMetadataName(
             ServiceAttributeName,
             static (node, _) => node is ClassDeclarationSyntax,
@@ -48,9 +51,44 @@ public sealed class KawaMagicOnionGenerator : IIncrementalGenerator
         context.RegisterSourceOutput(hubs, static (productionContext, values) => EmitHubs(productionContext, values));
     }
 
+    private static void RegisterDiagnostics(IncrementalGeneratorInitializationContext context, string attributeName, bool hub)
+    {
+        var diagnostics = context.SyntaxProvider.ForAttributeWithMetadataName(attributeName,
+            static (node, _) => node is ClassDeclarationSyntax,
+            (attributeContext, _) => ValidationError((INamedTypeSymbol)attributeContext.TargetSymbol, attributeContext.Attributes[0], hub));
+        context.RegisterSourceOutput(diagnostics, static (productionContext, diagnostic) =>
+        {
+            if (diagnostic is not null) productionContext.ReportDiagnostic(diagnostic);
+        });
+    }
+
+    private static Diagnostic Error(string id, string message, Location? location = null) => Diagnostic.Create(
+        new DiagnosticDescriptor(id, "Invalid Kawa MagicOnion declaration", "{0}", "Kawa", DiagnosticSeverity.Error, true),
+        location ?? Location.None, message);
+
+    private static Diagnostic? ValidationError(INamedTypeSymbol type, AttributeData attribute, bool hub)
+    {
+        var contracts = type.AllInterfaces.Where(candidate => hub
+            ? candidate.OriginalDefinition.ToDisplayString() == StreamingHubUseCaseName
+            : IsSupportedUseCaseContract(candidate.OriginalDefinition.ToDisplayString())).ToArray();
+        var name = attribute.ConstructorArguments.FirstOrDefault().Value as string;
+        if (type.IsAbstract || type.IsGenericType || type.DeclaredAccessibility != Accessibility.Public || contracts.Length != 1)
+            return Error("KAWA5001", type + " must be public, concrete, nongeneric, and implement exactly one matching Kawa contract.", type.Locations.FirstOrDefault());
+        var operationName = type.GetAttributes().FirstOrDefault(value => value.AttributeClass?.ToDisplayString() == OperationAttributeName)
+            ?.ConstructorArguments.FirstOrDefault().Value as string ?? RemoveUseCaseSuffix(type.Name);
+        if (string.IsNullOrWhiteSpace(name) || !SyntaxFacts.IsValidIdentifier(ToIdentifier(name!))
+            || (!hub && (string.IsNullOrWhiteSpace(operationName) || !SyntaxFacts.IsValidIdentifier(ToIdentifier(operationName)))))
+            return Error("KAWA5002", "Service, hub and operation names must produce valid nonempty C# identifiers.", type.Locations.FirstOrDefault());
+        if (contracts[0].TypeArguments.Any(argument => argument.TypeKind is TypeKind.Delegate or TypeKind.Pointer or TypeKind.FunctionPointer or TypeKind.Error or TypeKind.TypeParameter
+            || argument is INamedTypeSymbol { IsRefLikeType: true }))
+            return Error("KAWA5004", "The RPC payload has an unsupported serializable shape.", type.Locations.FirstOrDefault());
+        return null;
+    }
+
     private static UseCaseModel? CreateUseCase(GeneratorAttributeSyntaxContext context)
     {
         var useCaseType = (INamedTypeSymbol)context.TargetSymbol;
+        if (ValidationError(useCaseType, context.Attributes[0], context.Attributes[0].AttributeClass?.ToDisplayString() == HubAttributeName) is not null) return null;
         var useCaseContract = useCaseType.AllInterfaces.FirstOrDefault(
             candidate => IsSupportedUseCaseContract(candidate.OriginalDefinition.ToDisplayString()));
 
@@ -76,6 +114,7 @@ public sealed class KawaMagicOnionGenerator : IIncrementalGenerator
         return new UseCaseModel(
             useCaseType.ContainingNamespace.IsGlobalNamespace ? "Generated" : useCaseType.ContainingNamespace.ToDisplayString() + ".Generated",
             serviceName!,
+            useCaseType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
             operationName!,
             GetUseCaseKind(useCaseContract.OriginalDefinition.ToDisplayString()),
             useCaseContract.TypeArguments[0].ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
@@ -85,6 +124,7 @@ public sealed class KawaMagicOnionGenerator : IIncrementalGenerator
     private static HubUseCaseModel? CreateHub(GeneratorAttributeSyntaxContext context)
     {
         var useCaseType = (INamedTypeSymbol)context.TargetSymbol;
+        if (ValidationError(useCaseType, context.Attributes[0], context.Attributes[0].AttributeClass?.ToDisplayString() == HubAttributeName) is not null) return null;
         var useCaseContract = useCaseType.AllInterfaces.FirstOrDefault(
             candidate => candidate.OriginalDefinition.ToDisplayString() == StreamingHubUseCaseName);
 
@@ -102,6 +142,7 @@ public sealed class KawaMagicOnionGenerator : IIncrementalGenerator
         return new HubUseCaseModel(
             useCaseType.ContainingNamespace.IsGlobalNamespace ? "Generated" : useCaseType.ContainingNamespace.ToDisplayString() + ".Generated",
             hubName!,
+            useCaseType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
             useCaseContract.TypeArguments[0].ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
             useCaseContract.TypeArguments[1].ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat));
     }
@@ -134,9 +175,15 @@ public sealed class KawaMagicOnionGenerator : IIncrementalGenerator
 
     private static void Emit(SourceProductionContext context, ImmutableArray<UseCaseModel> values)
     {
-        foreach (var service in values.GroupBy(static value => value.Namespace + "|" + value.ServiceName, StringComparer.Ordinal))
+        foreach (var service in values.GroupBy(static value => value.Namespace + "|" + ToIdentifier(value.ServiceName), StringComparer.Ordinal))
         {
             var first = service.First();
+            if (service.Select(value => value.ServiceName).Distinct(StringComparer.Ordinal).Count() > 1
+                || service.GroupBy(value => ToIdentifier(value.OperationName), StringComparer.Ordinal).Any(group => group.Count() > 1))
+            {
+                context.ReportDiagnostic(Error("KAWA5002", "Conflicting generated service or operation names in " + first.Namespace));
+                continue;
+            }
             var serviceIdentifier = ToIdentifier(first.ServiceName);
             var source = new StringBuilder();
             source.AppendLine("// <auto-generated />");
@@ -169,13 +216,13 @@ public sealed class KawaMagicOnionGenerator : IIncrementalGenerator
             source.AppendLine("    private readonly global::Kawa.Core.DuplexStreamingUseCaseExecutor _duplexStreamingExecutor;");
             source.AppendLine();
             source.Append("    public ").Append(serviceIdentifier).Append("MagicOnionServiceAdapter(");
-            source.Append(string.Join(", ", service.Select(operation => GetUseCaseContractType(operation) + " " + LowerFirst(ToIdentifier(operation.OperationName)) + "UseCase")));
+            source.Append("global::System.IServiceProvider services");
             source.AppendLine(", global::Kawa.Core.UseCaseExecutor executor, global::Kawa.Core.ServerStreamingUseCaseExecutor serverStreamingExecutor, global::Kawa.Core.ClientStreamingUseCaseExecutor clientStreamingExecutor, global::Kawa.Core.DuplexStreamingUseCaseExecutor duplexStreamingExecutor)");
             source.AppendLine("    {");
             foreach (var operation in service)
             {
                 var identifier = ToIdentifier(operation.OperationName);
-                source.Append("        _").Append(identifier).Append("UseCase = ").Append(LowerFirst(identifier)).AppendLine("UseCase;");
+                source.Append("        _").Append(identifier).Append("UseCase = ").Append("global::Kawa.Core.KawaUseCaseResolver.Resolve<").Append(operation.ImplementationType).Append(", ").Append(GetUseCaseContractType(operation)).AppendLine(">(services);");
             }
             source.AppendLine("        _executor = executor;");
             source.AppendLine("        _serverStreamingExecutor = serverStreamingExecutor;");
@@ -213,14 +260,31 @@ public sealed class KawaMagicOnionGenerator : IIncrementalGenerator
             source.AppendLine("    }");
 
             source.AppendLine("}");
-            context.AddSource(serviceIdentifier + ".MagicOnion.g.cs", SourceText.From(source.ToString(), Encoding.UTF8));
+            source.Append("public static class ").Append(serviceIdentifier).AppendLine("MagicOnionClientRegistration");
+            source.AppendLine("{");
+            source.Append("    public static global::Microsoft.Extensions.DependencyInjection.IServiceCollection Add").Append(serviceIdentifier)
+                .Append("MagicOnionClient(this global::Microsoft.Extensions.DependencyInjection.IServiceCollection services, global::System.Func<global::System.IServiceProvider, I")
+                .Append(serviceIdentifier).AppendLine("MagicOnionService> factory)");
+            source.AppendLine("    {");
+            source.AppendLine("        if (services is null) throw new global::System.ArgumentNullException(nameof(services));");
+            source.AppendLine("        if (factory is null) throw new global::System.ArgumentNullException(nameof(factory));");
+            source.Append("        return global::Microsoft.Extensions.DependencyInjection.ServiceCollectionServiceExtensions.AddSingleton<I").Append(serviceIdentifier).AppendLine("MagicOnionService>(services, factory);");
+            source.AppendLine("    }");
+            source.AppendLine("}");
+            context.AddSource(SourceHint(first.Namespace + "|" + serviceIdentifier) + ".MagicOnion.g.cs", SourceText.From(source.ToString(), Encoding.UTF8));
         }
     }
 
     private static void EmitHubs(SourceProductionContext context, ImmutableArray<HubUseCaseModel> values)
     {
-        foreach (var hub in values)
+        foreach (var group in values.GroupBy(value => value.Namespace + "|" + ToIdentifier(value.HubName), StringComparer.Ordinal))
         {
+            if (group.Count() != 1)
+            {
+                context.ReportDiagnostic(Error("KAWA5003", "Duplicate streaming hub declaration: " + group.Key));
+                continue;
+            }
+            var hub = group.Single();
             var hubIdentifier = ToIdentifier(hub.HubName);
             var source = new StringBuilder();
             source.AppendLine("// <auto-generated />");
@@ -246,9 +310,9 @@ public sealed class KawaMagicOnionGenerator : IIncrementalGenerator
             source.Append("    private readonly global::System.Collections.Generic.Dictionary<string, global::MagicOnion.Server.Hubs.IGroup<I").Append(hubIdentifier).AppendLine("MagicOnionHubReceiver>> _groups = new global::System.Collections.Generic.Dictionary<string, global::MagicOnion.Server.Hubs.IGroup<I" + hubIdentifier + "MagicOnionHubReceiver>>();");
             source.Append("    private HubSession? _session;").AppendLine();
             source.AppendLine();
-            source.Append("    public ").Append(hubIdentifier).Append("MagicOnionHubAdapter(global::Kawa.Abstractions.IStreamingHubUseCase<").Append(hub.ClientEventType).Append(", ").Append(hub.ServerEventType).AppendLine("> useCase, global::Kawa.Core.StreamingHubUseCaseExecutor executor)");
+            source.Append("    public ").Append(hubIdentifier).AppendLine("MagicOnionHubAdapter(global::System.IServiceProvider services, global::Kawa.Core.StreamingHubUseCaseExecutor executor)");
             source.AppendLine("    {");
-            source.AppendLine("        _useCase = useCase;");
+            source.Append("        _useCase = global::Kawa.Core.KawaUseCaseResolver.Resolve<").Append(hub.ImplementationType).Append(", global::Kawa.Abstractions.IStreamingHubUseCase<").Append(hub.ClientEventType).Append(", ").Append(hub.ServerEventType).AppendLine(">>(services);");
             source.AppendLine("        _executor = executor;");
             source.AppendLine("    }");
             source.AppendLine();
@@ -301,13 +365,19 @@ public sealed class KawaMagicOnionGenerator : IIncrementalGenerator
             source.Append("        private readonly ").Append(hubIdentifier).AppendLine("MagicOnionHubAdapter _hub;");
             source.AppendLine("        public HubSession(" + hubIdentifier + "MagicOnionHubAdapter hub, string connectionId) { _hub = hub; ConnectionId = connectionId; }");
             source.AppendLine("        public string ConnectionId { get; }");
-            source.Append("        public global::System.Threading.Tasks.Task SendAsync(").Append(hub.ServerEventType).AppendLine(" serverEvent, global::System.Threading.CancellationToken cancellationToken = default) => _hub.SendAsync(serverEvent);");
-            source.Append("        public global::System.Threading.Tasks.Task BroadcastToGroupAsync(string groupName, ").Append(hub.ServerEventType).AppendLine(" serverEvent, global::System.Threading.CancellationToken cancellationToken = default) => _hub.BroadcastToGroupAsync(groupName, serverEvent);");
-            source.AppendLine("        public global::System.Threading.Tasks.Task JoinGroupAsync(string groupName, global::System.Threading.CancellationToken cancellationToken = default) => _hub.JoinGroupAsync(groupName);");
-            source.AppendLine("        public global::System.Threading.Tasks.Task LeaveGroupAsync(string groupName, global::System.Threading.CancellationToken cancellationToken = default) => _hub.LeaveGroupAsync(groupName);");
+            source.Append("        public global::System.Threading.Tasks.Task SendAsync(").Append(hub.ServerEventType).AppendLine(" serverEvent, global::System.Threading.CancellationToken cancellationToken = default) => InvokeAsync(() => _hub.SendAsync(serverEvent), cancellationToken);");
+            source.Append("        public global::System.Threading.Tasks.Task BroadcastToGroupAsync(string groupName, ").Append(hub.ServerEventType).AppendLine(" serverEvent, global::System.Threading.CancellationToken cancellationToken = default) => InvokeAsync(() => _hub.BroadcastToGroupAsync(groupName, serverEvent), cancellationToken);");
+            source.AppendLine("        public global::System.Threading.Tasks.Task JoinGroupAsync(string groupName, global::System.Threading.CancellationToken cancellationToken = default) => InvokeAsync(() => _hub.JoinGroupAsync(groupName), cancellationToken);");
+            source.AppendLine("        public global::System.Threading.Tasks.Task LeaveGroupAsync(string groupName, global::System.Threading.CancellationToken cancellationToken = default) => InvokeAsync(() => _hub.LeaveGroupAsync(groupName), cancellationToken);");
+            source.AppendLine("        private static async global::System.Threading.Tasks.Task InvokeAsync(global::System.Func<global::System.Threading.Tasks.Task> operation, global::System.Threading.CancellationToken cancellationToken)");
+            source.AppendLine("        {");
+            source.AppendLine("            cancellationToken.ThrowIfCancellationRequested();");
+            source.AppendLine("            await operation().ConfigureAwait(false);");
+            source.AppendLine("            cancellationToken.ThrowIfCancellationRequested();");
+            source.AppendLine("        }");
             source.AppendLine("    }");
             source.AppendLine("}");
-            context.AddSource(hubIdentifier + ".MagicOnionHub.g.cs", SourceText.From(source.ToString(), Encoding.UTF8));
+            context.AddSource(SourceHint(hub.Namespace + "|" + hubIdentifier) + ".MagicOnionHub.g.cs", SourceText.From(source.ToString(), Encoding.UTF8));
         }
     }
 
@@ -400,6 +470,8 @@ public sealed class KawaMagicOnionGenerator : IIncrementalGenerator
         return string.Concat(parts.Select(static part => char.ToUpperInvariant(part[0]) + part.Substring(1)));
     }
 
+    private static string SourceHint(string value) => Convert.ToBase64String(Encoding.UTF8.GetBytes(value)).TrimEnd('=').Replace('/', '_').Replace('+', '-');
+
     private static string LowerFirst(string value) => char.ToLowerInvariant(value[0]) + value.Substring(1);
 
     private enum UseCaseKind
@@ -412,16 +484,18 @@ public sealed class KawaMagicOnionGenerator : IIncrementalGenerator
 
     private sealed class UseCaseModel
     {
-        public UseCaseModel(string @namespace, string serviceName, string operationName, UseCaseKind kind, string requestType, string responseType)
+        public UseCaseModel(string @namespace, string serviceName, string implementationType, string operationName, UseCaseKind kind, string requestType, string responseType)
         {
             Namespace = @namespace;
             ServiceName = serviceName;
+            ImplementationType = implementationType;
             OperationName = operationName;
             Kind = kind;
             RequestType = requestType;
             ResponseType = responseType;
         }
 
+        public string ImplementationType { get; }
         public string Namespace { get; }
         public string ServiceName { get; }
         public string OperationName { get; }
@@ -432,14 +506,16 @@ public sealed class KawaMagicOnionGenerator : IIncrementalGenerator
 
     private sealed class HubUseCaseModel
     {
-        public HubUseCaseModel(string @namespace, string hubName, string clientEventType, string serverEventType)
+        public HubUseCaseModel(string @namespace, string hubName, string implementationType, string clientEventType, string serverEventType)
         {
             Namespace = @namespace;
             HubName = hubName;
+            ImplementationType = implementationType;
             ClientEventType = clientEventType;
             ServerEventType = serverEventType;
         }
 
+        public string ImplementationType { get; }
         public string Namespace { get; }
         public string HubName { get; }
         public string ClientEventType { get; }

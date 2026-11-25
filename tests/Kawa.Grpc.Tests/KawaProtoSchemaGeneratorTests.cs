@@ -140,6 +140,7 @@ public sealed class KawaProtoSchemaGeneratorTests
             {
                 [KawaProtoField(1)]
                 public string Message { get; init; } = string.Empty;
+                [KawaProtoField(2)] public byte[] Payload { get; init; } = [];
             }
 
             public sealed class SendResponse
@@ -153,6 +154,7 @@ public sealed class KawaProtoSchemaGeneratorTests
             PackageName = "chat.contracts",
             OutputPath = outputPath,
             SourceFiles = [new TaskItem(sourcePath)],
+            ReferenceFiles = [new TaskItem(typeof(Kawa.Abstractions.IUseCase<,>).Assembly.Location), new TaskItem(typeof(Kawa.Grpc.KawaProtoServiceAttribute).Assembly.Location)],
         };
 
         try
@@ -162,6 +164,7 @@ public sealed class KawaProtoSchemaGeneratorTests
             Assert.Contains("service Chat", schema);
             Assert.Contains("rpc Send(SendRequest) returns (SendResponse);", schema);
             Assert.Contains("string message = 1;", schema);
+            Assert.Contains("bytes payload = 2;", schema);
             Assert.Contains("bool accepted = 1;", schema);
         }
         finally
@@ -208,6 +211,7 @@ public sealed class KawaProtoSchemaGeneratorTests
             PackageName = "chat.contracts",
             OutputPath = Path.Combine(temporaryDirectory, "obj", "Kawa", "chat.proto"),
             SourceFiles = [new TaskItem(sourcePath)],
+            ReferenceFiles = [new TaskItem(typeof(Kawa.Abstractions.IUseCase<,>).Assembly.Location), new TaskItem(typeof(Kawa.Grpc.KawaProtoServiceAttribute).Assembly.Location)],
         };
 
         try
@@ -223,4 +227,44 @@ public sealed class KawaProtoSchemaGeneratorTests
             }
         }
     }
+    /// <summary>Invalid members after the first property must be diagnosed instead of omitted.</summary>
+    [Theory]
+    [InlineData("public string Missing { get; init; } = string.Empty;", "KAWA5102")]
+    [InlineData("[KawaProtoField(1)] public string Duplicate { get; init; } = string.Empty;", "KAWA5101")]
+    [InlineData("[KawaProtoField(19000)] public string Reserved { get; init; } = string.Empty;", "KAWA5101")]
+    [InlineData("[KawaProtoField(2)] public decimal Unsupported { get; init; }", "KAWA5103")]
+    public void Task_DiagnosesInvalidTrailingMembers(string member, string diagnostic)
+    {
+        var directory = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+        var path = Path.Combine(directory, "Contracts.cs");
+        File.WriteAllText(path, """
+            using Kawa.Abstractions;
+            using Kawa.Grpc;
+            [KawaProtoService("Chat")]
+            public class SendUseCase : IUseCase<Request, Request>
+            {
+                public System.Threading.Tasks.Task<KawaResult<Request>> ExecuteAsync(Request request, System.Threading.CancellationToken cancellationToken = default) => throw null!;
+            }
+            public class Request
+            {
+                [KawaProtoField(1)] public string Message { get; init; } = "literal }";
+                MEMBER
+            }
+            public class Unrelated { public string Setting { get; init; } = ""; }
+            """.Replace("MEMBER", member));
+        var task = new KawaProtoSchemaGenerationTask
+        {
+            PackageName = "test", OutputPath = Path.Combine(directory, "obj", "generated.proto"),
+            SourceFiles = [new TaskItem(path)],
+            ReferenceFiles = [new TaskItem(typeof(Kawa.Abstractions.IUseCase<,>).Assembly.Location), new TaskItem(typeof(Kawa.Grpc.KawaProtoServiceAttribute).Assembly.Location)],
+        };
+        try
+        {
+            Assert.False(task.Execute());
+            Assert.Contains(task.Diagnostics, item => item.Id == diagnostic);
+        }
+        finally { Directory.Delete(directory, recursive: true); }
+    }
+
 }

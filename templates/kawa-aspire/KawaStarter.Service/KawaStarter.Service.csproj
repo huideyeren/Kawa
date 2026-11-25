@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../KawaStarter.ChatContracts/KawaStarter.ChatContracts.csproj" />
+    <ProjectReference Include="../KawaStarter.ServiceDefaults/KawaStarter.ServiceDefaults.csproj" />
+    <PackageReference Include="Kawa.Web" Version="__KAWA_VERSION__" />
+  </ItemGroup>
+</Project>

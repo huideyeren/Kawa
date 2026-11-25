@@ -16,7 +16,17 @@ public sealed record KawaApiCatalog(IReadOnlyList<KawaApiCatalogUseCase> UseCase
         ArgumentNullException.ThrowIfNull(entries);
 
         var useCases = entries
-            .Select(KawaApiCatalogUseCase.FromEntry)
+            .GroupBy(entry => (entry.UseCaseType, entry.RequestType, entry.ResponseType, entry.Metadata.Name, entry.Metadata.Version))
+            .Select(group =>
+            {
+                var first = group.First();
+                var transports = group.SelectMany(entry => entry.Transports ?? [])
+                    .Distinct().OrderBy(transport => transport.Kind, StringComparer.Ordinal).ToArray();
+                return KawaApiCatalogUseCase.FromEntry(first with
+                {
+                    Transports = transports.Length == 0 ? null : transports,
+                });
+            })
             .OrderBy(useCase => useCase.Name, StringComparer.Ordinal)
             .ToArray();
 

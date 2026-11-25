@@ -2,6 +2,40 @@
 
 All notable changes to Kawa are documented here.
 
+## [Unreleased]
+
+## [0.5.0] - 2026-11-25
+
+### Added
+
+- Transport-neutral server/client/duplex streaming and typed hub contracts, executors, and payload-free activity/meter instrumentation.
+- MagicOnion service/hub generation, all four raw RPC modes, typed receivers/groups, explicit generator diagnostics and typed client factory registration.
+- Protobuf schema generation under `obj/`, generated server adapters, semantic DTO graph discovery and bytes/enum/nested/repeated conversions; explicit adapters for existing proto contracts.
+- `Kawa.Cli` command binding with per-invocation scopes, JSON stdout, diagnostic stderr, cancellation, configurable exit codes and text formatting.
+- Aspire service defaults, health endpoints, service discovery and AppHost project/reference helpers.
+- Four package-backed `dotnet new` templates, runnable transport/Aspire samples, the `kawa grpc export` tool and isolated package/template smoke checks.
+- A separate .NET 11 SDK/runtime compatibility CI job; main development and the primary CI job remain on .NET 10.
+
+### Changed
+
+- Add optional catalog transport metadata while retaining positional constructors and existing JSON fields; merge explicit non-HTTP bindings with mapped HTTP endpoints.
+- Align new HTTP error kinds with OpenAPI and preserve existing numeric error values, including `Unknown = 5`.
+
+### Fixed
+
+- Resolve generated RPC/hub handlers by implementation identity when operations share DTOs, preserving ordinary DI override behavior.
+- Terminate and dispose Core streams after the first failure.
+- Parse complete protobuf DTOs with resolved types; diagnose unnumbered, duplicate, reserved and unsupported fields instead of dropping data.
+- Prevent generated-name collisions across namespaces and observe Hub cancellation before operations and after asynchronous completion.
+- Include MapGroup prefixes in catalog routes and start/stop the Aspire CLI sample host.
+- Require matching repository/package versions and dated bilingual release notes before publishing packages.
+
+### Security
+
+- Require MessagePack 3.1.9 for MagicOnion and patched Aspire.Hosting 13.6.5 (whose dependency floor includes MessagePack 2.5.307).
+- Validate release tags through environment variables to prevent shell injection.
+- Redact Unknown/undefined error details in HTTP, RPC status/trailers and CLI output.
+
 ## [0.4.0] - 2026-07-31
 
 ### Added

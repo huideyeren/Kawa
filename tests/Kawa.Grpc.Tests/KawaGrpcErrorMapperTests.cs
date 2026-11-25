@@ -11,6 +11,22 @@ namespace Kawa.Grpc.Tests;
 /// </summary>
 public sealed class KawaGrpcErrorMapperTests
 {
+    [Theory]
+    [InlineData(KawaErrorKind.Unknown)]
+    [InlineData((KawaErrorKind)999)]
+    public void InternalErrors_RedactStatusAndTrailer(KawaErrorKind kind)
+    {
+        var error = new KawaError(kind, "secret-connection-string");
+        var mapped = KawaGrpcErrorMapper.Map(error);
+        Assert.Equal(StatusCode.Internal, mapped.StatusCode);
+        Assert.Equal("An unexpected error occurred.", mapped.Detail);
+        using var json = System.Text.Json.JsonDocument.Parse(mapped.KawaErrorJson);
+        Assert.Equal("Unknown", json.RootElement.GetProperty("kind").GetString());
+        Assert.Equal(mapped.Detail, json.RootElement.GetProperty("message").GetString());
+        Assert.DoesNotContain(error.Message, Encoding.UTF8.GetString(mapped.KawaErrorJson));
+        Assert.Equal("secret-connection-string", error.Message);
+    }
+
     /// <summary>
     /// Ensures Kawa's retryable failure keeps the portable status and structured error payload.
     /// </summary>

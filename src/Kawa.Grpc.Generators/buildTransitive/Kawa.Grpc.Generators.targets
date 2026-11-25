@@ -1,6 +1,6 @@
 <Project>
   <PropertyGroup>
-    <KawaGrpcGeneratorsAssemblyPath Condition="'$(KawaGrpcGeneratorsAssemblyPath)' == ''">$(MSBuildThisFileDirectory)..\lib\net10.0\Kawa.Grpc.Generators.dll</KawaGrpcGeneratorsAssemblyPath>
+    <KawaGrpcGeneratorsAssemblyPath Condition="'$(KawaGrpcGeneratorsAssemblyPath)' == ''">$(MSBuildThisFileDirectory)..\tools\net10.0\Kawa.Grpc.Generators.dll</KawaGrpcGeneratorsAssemblyPath>
   </PropertyGroup>
 
   <UsingTask TaskName="Kawa.Grpc.Generators.KawaProtoSchemaGenerationTask"
@@ -14,7 +14,9 @@
   </PropertyGroup>
 
   <Target Name="KawaGrpcGenerateProto"
-          BeforeTargets="PrepareForBuild"
+          AfterTargets="ResolveReferences"
+          BeforeTargets="BeforeCompile"
+          DependsOnTargets="ResolveReferences"
           Condition="'@(Compile)' != '' or '@(KawaProtoService)' != ''">
     <PropertyGroup>
       <!-- IntermediateOutputPath is finalized after transitive targets are imported. -->
@@ -28,7 +30,8 @@
                                    OutputPath="$(KawaProtoOutputPath)"
                                    AdapterOutputPath="$(KawaGrpcAdapterOutputPath)"
                                    ServiceDefinitions="@(KawaProtoService)"
-                                   SourceFiles="@(Compile)">
+                                   SourceFiles="@(Compile)"
+                                   ReferenceFiles="@(ReferencePath)">
       <Output TaskParameter="GeneratedSchemaPath" PropertyName="_KawaProtoGeneratedSchemaPath" />
       <Output TaskParameter="GeneratedAdapterSourcePath" PropertyName="_KawaGrpcGeneratedAdapterSourcePath" />
     </KawaProtoSchemaGenerationTask>

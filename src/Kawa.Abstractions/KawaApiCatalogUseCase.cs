@@ -21,6 +21,10 @@ public sealed record KawaApiCatalogUseCase(
     KawaApiCatalogContract Response,
     IReadOnlyList<KawaApiCatalogErrorResponse> ErrorResponses)
 {
+    /// <summary>Gets explicitly supplied transport bindings, omitted when unavailable.</summary>
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<KawaApiCatalogTransport>? Transports { get; init; }
+
     /// <summary>
     /// Creates public API catalog use case metadata from a use case catalog entry.
     /// </summary>
@@ -40,6 +44,6 @@ public sealed record KawaApiCatalogUseCase(
             KawaApiCatalogContract.FromType(entry.ResponseType),
             entry.ErrorResponses
                 .Select(KawaApiCatalogErrorResponse.FromMetadata)
-                .ToArray());
+                .ToArray()) { Transports = entry.Transports };
     }
 }

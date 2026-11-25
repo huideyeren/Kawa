@@ -227,6 +227,52 @@ public sealed class KawaMagicOnionGeneratorTests
         Assert.Contains("sealed class ChatMagicOnionServiceAdapter", generated);
     }
 
+    /// <summary>Ambiguous annotated contracts must produce an explicit Kawa diagnostic.</summary>
+    [Fact]
+    public void Generator_ReportsAmbiguousContracts()
+    {
+        const string source = """
+            using Kawa.Abstractions;
+            using Kawa.MagicOnion;
+            [KawaMagicOnionService("chat")]
+            public abstract class Ambiguous : IUseCase<string,int>, IUseCase<int,string> { }
+            """;
+        var compilation = CSharpCompilation.Create("Invalid", [CSharpSyntaxTree.ParseText(source)], References);
+        var result = CSharpGeneratorDriver.Create(new KawaMagicOnionGenerator()).RunGenerators(compilation).GetRunResult();
+        Assert.Contains(result.Diagnostics, diagnostic => diagnostic.Id == "KAWA5001");
+    }
+
+    /// <summary>Namespaces disambiguate identical generated service names.</summary>
+    [Fact]
+    public void Generator_DisambiguatesNamespaceHints()
+    {
+        string source = """
+            using Kawa.Abstractions;
+            using Kawa.MagicOnion;
+            namespace One { [KawaMagicOnionService("chat")] public abstract class Send : IUseCase<string,int> {} }
+            namespace Two { [KawaMagicOnionService("chat")] public abstract class Send : IUseCase<string,int> {} }
+            """;
+        // Concrete bodies keep the test about source hints, not invalid implementations.
+        source = source.Replace("abstract class Send : IUseCase<string,int> {}", "class Send : IUseCase<string,int> { public System.Threading.Tasks.Task<KawaResult<int>> ExecuteAsync(string request, System.Threading.CancellationToken cancellationToken = default) => throw null!; }");
+        var compilation = CSharpCompilation.Create("Namespaces", [CSharpSyntaxTree.ParseText(source)], References);
+        var result = CSharpGeneratorDriver.Create(new KawaMagicOnionGenerator()).RunGenerators(compilation).GetRunResult();
+        Assert.Empty(result.Diagnostics.Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error));
+        Assert.Equal(2, result.GeneratedTrees.Length);
+    }
+
+    /// <summary>Invalid names, payloads and duplicate generated operations fail explicitly.</summary>
+    [Theory]
+    [InlineData("[KawaMagicOnionService(\"---\")] public class Bad : IUseCase<string,int> { public System.Threading.Tasks.Task<KawaResult<int>> ExecuteAsync(string r, System.Threading.CancellationToken c = default) => throw null!; }", "KAWA5002")]
+    [InlineData("[KawaMagicOnionService(\"chat\")] public class Bad : IUseCase<System.Action,int> { public System.Threading.Tasks.Task<KawaResult<int>> ExecuteAsync(System.Action r, System.Threading.CancellationToken c = default) => throw null!; }", "KAWA5004")]
+    [InlineData("[KawaMagicOnionHub(\"chat\")] public class Bad {}", "KAWA5001")]
+    [InlineData("[KawaMagicOnionService(\"chat\"), KawaMagicOnionOperation(\"send\")] public class First : IUseCase<string,int> { public System.Threading.Tasks.Task<KawaResult<int>> ExecuteAsync(string r, System.Threading.CancellationToken c = default) => throw null!; } [KawaMagicOnionService(\"chat\"), KawaMagicOnionOperation(\"send\")] public class Second : IUseCase<string,int> { public System.Threading.Tasks.Task<KawaResult<int>> ExecuteAsync(string r, System.Threading.CancellationToken c = default) => throw null!; }", "KAWA5002")]
+    public void Generator_ReportsInvalidDeclarations(string declaration, string id)
+    {
+        var compilation = CSharpCompilation.Create("Invalid", [CSharpSyntaxTree.ParseText("using Kawa.Abstractions; using Kawa.MagicOnion; " + declaration)], References);
+        var result = CSharpGeneratorDriver.Create(new KawaMagicOnionGenerator()).RunGenerators(compilation).GetRunResult();
+        Assert.Contains(result.Diagnostics, diagnostic => diagnostic.Id == id);
+    }
+
     private static IReadOnlyList<MetadataReference> References { get; } =
         ((string)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES")!)
         .Split(Path.PathSeparator)

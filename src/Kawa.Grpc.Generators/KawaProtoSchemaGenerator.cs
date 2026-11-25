@@ -32,8 +32,7 @@ public static class KawaProtoSchemaGenerator
             return new KawaProtoSchemaGenerationResult(string.Empty, diagnostics);
         }
 
-        var messages = services
-            .SelectMany(static service => new[] { service.Request, service.Response })
+        var messages = GetMessages(services)
             .GroupBy(static message => message.Name, StringComparer.Ordinal)
             .Select(static group => group.First())
             .OrderBy(static message => message.Name, StringComparer.Ordinal)
@@ -50,12 +49,24 @@ public static class KawaProtoSchemaGenerator
 
         schema.AppendLine();
 
+        foreach (var field in messages.SelectMany(message => message.Fields).Where(field => field.EnumValues is not null)
+            .GroupBy(field => field.Type, StringComparer.Ordinal).Select(group => group.First()).OrderBy(field => field.Type, StringComparer.Ordinal))
+        {
+            schema.Append("enum ").Append(field.Type).AppendLine(" {");
+            var values = field.EnumValues!;
+            if (!values.Any(value => value.Value == 0)) schema.Append("  ").Append(field.Type).AppendLine("_UNSPECIFIED = 0;");
+            if (values.Select(value => value.Value).Distinct().Count() != values.Count) schema.AppendLine("  option allow_alias = true;");
+            foreach (var value in values.OrderBy(value => value.Value == 0 ? 0 : 1).ThenBy(value => value.Key, StringComparer.Ordinal))
+                schema.Append("  ").Append(field.Type).Append('_').Append(value.Key).Append(" = ").Append(value.Value).AppendLine(";");
+            schema.AppendLine("}");
+        }
+
         foreach (var message in messages)
         {
             schema.Append("message ").Append(message.Name).AppendLine(" {");
             foreach (var field in message.Fields.OrderBy(static field => field.Number))
             {
-                schema.Append("  ").Append(field.Type).Append(' ').Append(field.Name).Append(" = ").Append(field.Number).AppendLine(";");
+                schema.Append("  ").Append(field.Repeated ? "repeated " : "").Append(field.Type).Append(' ').Append(field.Name).Append(" = ").Append(field.Number).AppendLine(";");
             }
 
             schema.AppendLine("}");
@@ -77,11 +88,22 @@ public static class KawaProtoSchemaGenerator
         return new KawaProtoSchemaGenerationResult(schema.ToString(), diagnostics);
     }
 
+    internal static IReadOnlyList<KawaProtoMessageDefinition> GetMessages(IReadOnlyList<KawaProtoServiceDefinition> services)
+    {
+        var messages = new Dictionary<string, KawaProtoMessageDefinition>(StringComparer.Ordinal);
+        void Visit(KawaProtoMessageDefinition message)
+        {
+            if (!messages.TryAdd(message.Name, message)) return;
+            foreach (var field in message.Fields) if (field.Message is not null) Visit(field.Message);
+        }
+        foreach (var service in services) { Visit(service.Request); Visit(service.Response); }
+        return messages.Values.OrderBy(message => message.Name, StringComparer.Ordinal).ToArray();
+    }
+
     private static IReadOnlyList<KawaProtoDiagnostic> ValidateFieldNumbers(IReadOnlyList<KawaProtoServiceDefinition> services)
     {
         var diagnostics = new List<KawaProtoDiagnostic>();
-        var messages = services
-            .SelectMany(static service => new[] { service.Request, service.Response })
+        var messages = GetMessages(services)
             .GroupBy(static message => message.Name, StringComparer.Ordinal)
             .Select(static group => group.First());
 
@@ -108,15 +130,6 @@ public static class KawaProtoSchemaGenerator
 /// </remarks>
 public sealed class KawaProtoSchemaGenerationTask : Microsoft.Build.Utilities.Task
 {
-    private static readonly Regex ServiceExpression = new(
-        "\\[KawaProtoService\\(\\\"(?<service>[^\\\"]+)\\\"\\)\\]\\s*public\\s+(?:sealed\\s+)?class\\s+(?<useCase>\\w+)\\s*:\\s*I(?<contract>UseCase|ServerStreamingUseCase|ClientStreamingUseCase|DuplexStreamingUseCase)<(?<request>\\w+),\\s*(?<response>\\w+)>",
-        RegexOptions.Compiled | RegexOptions.CultureInvariant);
-    private static readonly Regex ContractExpression = new(
-        "public\\s+(?:sealed\\s+)?class\\s+(?<name>\\w+)\\s*\\{(?<body>.*?)\\}",
-        RegexOptions.Compiled | RegexOptions.CultureInvariant | RegexOptions.Singleline);
-    private static readonly Regex FieldExpression = new(
-        "\\[KawaProtoField\\((?<number>\\d+)\\)\\]\\s*public\\s+(?<type>[\\w\\[\\]]+)\\s+(?<name>\\w+)",
-        RegexOptions.Compiled | RegexOptions.CultureInvariant);
     /// <summary>
     /// Gets or sets the protobuf package name.
     /// </summary>
@@ -162,6 +175,9 @@ public sealed class KawaProtoSchemaGenerationTask : Microsoft.Build.Utilities.Ta
     /// </summary>
     public ITaskItem[] SourceFiles { get; set; } = Array.Empty<ITaskItem>();
 
+    /// <summary>Gets or sets resolved compilation references used for semantic discovery.</summary>
+    public ITaskItem[] ReferenceFiles { get; set; } = Array.Empty<ITaskItem>();
+
     /// <summary>
     /// Gets the diagnostics from the most recent task execution.
     /// </summary>
@@ -200,7 +216,7 @@ public sealed class KawaProtoSchemaGenerationTask : Microsoft.Build.Utilities.Ta
             definitions = ServiceDefinitions.Length != 0
                 ? CreateServiceDefinitions(ServiceDefinitions)
                 : SourceFiles.Length != 0
-                    ? CreateServiceDefinitionsFromSource(SourceFiles)
+                    ? KawaProtoSourceReader.Read(SourceFiles, ReferenceFiles)
                     : Services;
         }
         catch (KawaProtoSchemaException exception)
@@ -281,27 +297,41 @@ public sealed class KawaProtoSchemaGenerationTask : Microsoft.Build.Utilities.Ta
 
             foreach (var operation in operations)
             {
-                var requestType = ProjectNamespace + "." + operation.Request.Name;
-                var responseType = ProjectNamespace + "." + operation.Response.Name;
+                var requestType = operation.Request.CSharpType ?? ProjectNamespace + "." + operation.Request.Name;
+                var responseType = operation.Response.CSharpType ?? ProjectNamespace + "." + operation.Response.Name;
                 source.Append("    private readonly global::Kawa.Abstractions.I").Append(GetUseCaseContractName(operation.Kind)).Append("<global::").Append(requestType).Append(", global::").Append(responseType).Append("> _").Append(ToFieldName(operation.OperationName)).AppendLine("UseCase;");
                 source.Append("    private readonly global::Kawa.Core.").Append(GetExecutorName(operation.Kind)).Append(" _").Append(ToFieldName(operation.OperationName)).AppendLine("Executor;");
             }
 
             source.Append("    public ").Append(adapterName).Append('(');
-            source.Append(string.Join(", ", operations.Select(operation => "global::Kawa.Abstractions.I" + GetUseCaseContractName(operation.Kind) + "<global::" + ProjectNamespace + "." + operation.Request.Name + ", global::" + ProjectNamespace + "." + operation.Response.Name + "> " + ToFieldName(operation.OperationName) + "UseCase, global::Kawa.Core." + GetExecutorName(operation.Kind) + " " + ToFieldName(operation.OperationName) + "Executor")));
+            source.Append("global::System.IServiceProvider services");
             source.AppendLine(")");
             source.AppendLine("    {");
             foreach (var operation in operations)
             {
                 var fieldName = ToFieldName(operation.OperationName);
-                source.Append("        _").Append(fieldName).Append("UseCase = ").Append(fieldName).AppendLine("UseCase;");
-                source.Append("        _").Append(fieldName).Append("Executor = ").Append(fieldName).AppendLine("Executor;");
+                var contractType = "global::Kawa.Abstractions.I" + GetUseCaseContractName(operation.Kind) + "<global::"
+                    + (operation.Request.CSharpType ?? ProjectNamespace + "." + operation.Request.Name) + ", global::"
+                    + (operation.Response.CSharpType ?? ProjectNamespace + "." + operation.Response.Name) + ">";
+                source.Append("        _").Append(fieldName).Append("UseCase = ");
+                if (!string.IsNullOrWhiteSpace(operation.ImplementationType))
+                {
+                    source.Append("global::Kawa.Core.KawaUseCaseResolver.Resolve<global::")
+                        .Append(operation.ImplementationType.Contains('.') ? operation.ImplementationType : ProjectNamespace + "." + operation.ImplementationType)
+                        .Append(", ").Append(contractType).AppendLine(">(services);");
+                }
+                else
+                {
+                    // Explicit service models predating implementation metadata retain contract-based resolution.
+                    source.Append('(').Append(contractType).Append(")services.GetService(typeof(").Append(contractType).AppendLine("))!;");
+                }
+                source.Append("        _").Append(fieldName).Append("Executor = (global::Kawa.Core.").Append(GetExecutorName(operation.Kind)).Append(")services.GetService(typeof(global::Kawa.Core.").Append(GetExecutorName(operation.Kind)).AppendLine("))!;");
             }
             source.AppendLine("    }");
 
             foreach (var operation in operations)
             {
-                var requestType = ProjectNamespace + "." + operation.Request.Name;
+                var requestType = operation.Request.CSharpType ?? ProjectNamespace + "." + operation.Request.Name;
                 var protoRequestType = CSharpNamespace + "." + operation.Request.Name;
                 var protoResponseType = CSharpNamespace + "." + operation.Response.Name;
                 var fieldName = ToFieldName(operation.OperationName);
@@ -319,10 +349,29 @@ public sealed class KawaProtoSchemaGenerationTask : Microsoft.Build.Utilities.Ta
             source.AppendLine();
         }
 
+        source.AppendLine("internal static class KawaProtoConversions");
+        source.AppendLine("{");
+        foreach (var message in KawaProtoSchemaGenerator.GetMessages(services))
+        {
+            var contractType = message.CSharpType ?? ProjectNamespace + "." + message.Name;
+            var protoType = CSharpNamespace + "." + message.Name;
+            source.Append("    internal static global::").Append(contractType).Append(" From").Append(message.Name).Append("(global::").Append(protoType).AppendLine(" value) => new()");
+            source.AppendLine("    {");
+            foreach (var field in message.Fields)
+                source.Append("        ").Append(field.CSharpName ?? ToPropertyName(field.Name)).Append(" = ").Append(RequestValue(field, "value")).AppendLine(",");
+            source.AppendLine("    };");
+            source.Append("    internal static global::").Append(protoType).Append(" To").Append(message.Name).Append("(global::").Append(contractType).AppendLine(" value) => new()");
+            source.AppendLine("    {");
+            foreach (var field in message.Fields)
+                source.Append("        ").Append(ToPropertyName(field.Name)).Append(" = ").Append(ResponseValue(field, "value")).AppendLine(",");
+            source.AppendLine("    };");
+        }
+        source.AppendLine("}");
+
         return source.ToString();
     }
 
-    private static void RenderUnaryAdapter(StringBuilder source, KawaProtoServiceDefinition service, string requestType, string protoRequestType, string protoResponseType, string useCaseField, string executorField)
+    private void RenderUnaryAdapter(StringBuilder source, KawaProtoServiceDefinition service, string requestType, string protoRequestType, string protoResponseType, string useCaseField, string executorField)
     {
         source.Append("    public override async global::System.Threading.Tasks.Task<global::").Append(protoResponseType).Append("> ").Append(service.OperationName).Append("(global::").Append(protoRequestType).AppendLine(" request, global::Grpc.Core.ServerCallContext context)");
         source.AppendLine("    {");
@@ -330,7 +379,7 @@ public sealed class KawaProtoSchemaGenerationTask : Microsoft.Build.Utilities.Ta
         source.AppendLine("        {");
         foreach (var field in service.Request.Fields)
         {
-            source.Append("            ").Append(ToPropertyName(field.Name)).Append(" = request.").Append(ToPropertyName(field.Name)).AppendLine(",");
+            source.Append("            ").Append(field.CSharpName ?? ToPropertyName(field.Name)).Append(" = ").Append(RequestValue(field, "request")).AppendLine(",");
         }
 
         source.AppendLine("        }, context.CancellationToken).ConfigureAwait(false);");
@@ -339,7 +388,7 @@ public sealed class KawaProtoSchemaGenerationTask : Microsoft.Build.Utilities.Ta
         source.AppendLine("    }");
     }
 
-    private static void RenderStreamingAdapter(
+    private void RenderStreamingAdapter(
         StringBuilder source,
         KawaProtoServiceDefinition service,
         string requestType,
@@ -366,7 +415,7 @@ public sealed class KawaProtoSchemaGenerationTask : Microsoft.Build.Utilities.Ta
             case KawaGrpcOperationKind.ClientStreaming:
                 source.Append("    public override async global::System.Threading.Tasks.Task<global::").Append(protoResponseType).Append("> ").Append(service.OperationName).Append("(global::Grpc.Core.IAsyncStreamReader<global::").Append(protoRequestType).AppendLine("> requestStream, global::Grpc.Core.ServerCallContext context)");
                 source.AppendLine("    {");
-                source.Append("        var result = await ").Append(executorField).Append(".ExecuteAsync(").Append(useCaseField).Append(", ReadRequests(requestStream, context.CancellationToken), context.CancellationToken).ConfigureAwait(false);").AppendLine();
+                source.Append("        var result = await ").Append(executorField).Append(".ExecuteAsync(").Append(useCaseField).Append(", ReadRequests").Append(service.OperationName).Append("(requestStream, context.CancellationToken), context.CancellationToken).ConfigureAwait(false);").AppendLine();
                 source.AppendLine("        if (result.IsFailure) throw global::Kawa.Grpc.KawaGrpcErrorMapper.ToRpcException(result.Error!);");
                 AppendResponseReturn(source, service, protoResponseType);
                 source.AppendLine("    }");
@@ -376,7 +425,7 @@ public sealed class KawaProtoSchemaGenerationTask : Microsoft.Build.Utilities.Ta
             case KawaGrpcOperationKind.DuplexStreaming:
                 source.Append("    public override async global::System.Threading.Tasks.Task ").Append(service.OperationName).Append("(global::Grpc.Core.IAsyncStreamReader<global::").Append(protoRequestType).Append("> requestStream, global::Grpc.Core.IServerStreamWriter<global::").Append(protoResponseType).AppendLine("> responseStream, global::Grpc.Core.ServerCallContext context)");
                 source.AppendLine("    {");
-                source.Append("        await foreach (var result in ").Append(executorField).Append(".ExecuteAsync(").Append(useCaseField).Append(", ReadRequests(requestStream, context.CancellationToken), context.CancellationToken))").AppendLine();
+                source.Append("        await foreach (var result in ").Append(executorField).Append(".ExecuteAsync(").Append(useCaseField).Append(", ReadRequests").Append(service.OperationName).Append("(requestStream, context.CancellationToken), context.CancellationToken))").AppendLine();
                 source.AppendLine("        {");
                 source.AppendLine("            if (result.IsFailure) throw global::Kawa.Grpc.KawaGrpcErrorMapper.ToRpcException(result.Error!);");
                 AppendWriteResponse(source, service, protoResponseType);
@@ -395,31 +444,31 @@ public sealed class KawaProtoSchemaGenerationTask : Microsoft.Build.Utilities.Ta
         source.AppendLine("        {");
         foreach (var field in service.Request.Fields)
         {
-            source.Append("            ").Append(ToPropertyName(field.Name)).Append(" = request.").Append(ToPropertyName(field.Name)).AppendLine(",");
+            source.Append("            ").Append(field.CSharpName ?? ToPropertyName(field.Name)).Append(" = ").Append(RequestValue(field, "request")).AppendLine(",");
         }
 
         source.AppendLine("        };");
     }
 
-    private static void AppendResponseReturn(StringBuilder source, KawaProtoServiceDefinition service, string protoResponseType)
+    private void AppendResponseReturn(StringBuilder source, KawaProtoServiceDefinition service, string protoResponseType)
     {
         source.Append("        return new global::").Append(protoResponseType).AppendLine("()");
         source.AppendLine("        {");
         foreach (var field in service.Response.Fields)
         {
-            source.Append("            ").Append(ToPropertyName(field.Name)).Append(" = result.Value!.").Append(ToPropertyName(field.Name)).AppendLine(",");
+            source.Append("            ").Append(ToPropertyName(field.Name)).Append(" = ").Append(ResponseValue(field)).AppendLine(",");
         }
 
         source.AppendLine("        };");
     }
 
-    private static void AppendWriteResponse(StringBuilder source, KawaProtoServiceDefinition service, string protoResponseType)
+    private void AppendWriteResponse(StringBuilder source, KawaProtoServiceDefinition service, string protoResponseType)
     {
         source.Append("            await responseStream.WriteAsync(new global::").Append(protoResponseType).AppendLine("()");
         source.AppendLine("            {");
         foreach (var field in service.Response.Fields)
         {
-            source.Append("                ").Append(ToPropertyName(field.Name)).Append(" = result.Value!.").Append(ToPropertyName(field.Name)).AppendLine(",");
+            source.Append("                ").Append(ToPropertyName(field.Name)).Append(" = ").Append(ResponseValue(field)).AppendLine(",");
         }
 
         source.AppendLine("            }).ConfigureAwait(false);");
@@ -428,7 +477,7 @@ public sealed class KawaProtoSchemaGenerationTask : Microsoft.Build.Utilities.Ta
     private static void AppendReadRequests(StringBuilder source, KawaProtoServiceDefinition service, string requestType, string protoRequestType)
     {
         source.AppendLine();
-        source.Append("    private static async global::System.Collections.Generic.IAsyncEnumerable<global::").Append(requestType).Append("> ReadRequests(global::Grpc.Core.IAsyncStreamReader<global::").Append(protoRequestType).AppendLine("> requestStream, [global::System.Runtime.CompilerServices.EnumeratorCancellation] global::System.Threading.CancellationToken cancellationToken)");
+        source.Append("    private static async global::System.Collections.Generic.IAsyncEnumerable<global::").Append(requestType).Append("> ReadRequests").Append(service.OperationName).Append("(global::Grpc.Core.IAsyncStreamReader<global::").Append(protoRequestType).AppendLine("> requestStream, [global::System.Runtime.CompilerServices.EnumeratorCancellation] global::System.Threading.CancellationToken cancellationToken)");
         source.AppendLine("    {");
         source.AppendLine("        while (await requestStream.MoveNext(cancellationToken).ConfigureAwait(false))");
         source.AppendLine("        {");
@@ -436,7 +485,7 @@ public sealed class KawaProtoSchemaGenerationTask : Microsoft.Build.Utilities.Ta
         source.AppendLine("            {");
         foreach (var field in service.Request.Fields)
         {
-            source.Append("                ").Append(ToPropertyName(field.Name)).Append(" = requestStream.Current.").Append(ToPropertyName(field.Name)).AppendLine(",");
+            source.Append("                ").Append(field.CSharpName ?? ToPropertyName(field.Name)).Append(" = ").Append(RequestValue(field, "requestStream.Current")).AppendLine(",");
         }
 
         source.AppendLine("            };");
@@ -450,7 +499,8 @@ public sealed class KawaProtoSchemaGenerationTask : Microsoft.Build.Utilities.Ta
             item.ItemSpec,
             GetRequiredMetadata(item, "OperationName"),
             new KawaProtoMessageDefinition(GetRequiredMetadata(item, "RequestName"), ParseFields(item, "RequestFields")),
-            new KawaProtoMessageDefinition(GetRequiredMetadata(item, "ResponseName"), ParseFields(item, "ResponseFields"))))
+            new KawaProtoMessageDefinition(GetRequiredMetadata(item, "ResponseName"), ParseFields(item, "ResponseFields")))
+            { ImplementationType = item.GetMetadata("ImplementationType") })
             .ToArray();
     }
 
@@ -467,44 +517,25 @@ public sealed class KawaProtoSchemaGenerationTask : Microsoft.Build.Utilities.Ta
         }
     }
 
-    private static IReadOnlyList<KawaProtoServiceDefinition> CreateServiceDefinitionsFromSource(IEnumerable<ITaskItem> sourceFiles)
+    private static string RequestValue(KawaProtoFieldDefinition field, string source)
     {
-        var source = string.Join(Environment.NewLine, sourceFiles.Select(file => File.ReadAllText(file.ItemSpec)));
-        var contracts = ContractExpression.Matches(source)
-            .Cast<Match>()
-            .ToDictionary(match => match.Groups["name"].Value, CreateMessage, StringComparer.Ordinal);
-
-        return ServiceExpression.Matches(source)
-            .Cast<Match>()
-            .Select(match => new KawaProtoServiceDefinition(
-                match.Groups["service"].Value,
-                RemoveUseCaseSuffix(match.Groups["useCase"].Value),
-                contracts[match.Groups["request"].Value],
-                contracts[match.Groups["response"].Value],
-                ToOperationKind(match.Groups["contract"].Value)))
-            .ToArray();
+        var value = source + "." + ToPropertyName(field.Name);
+        string Convert(string item) => field.Type == "bytes" ? item + ".ToByteArray()"
+            : field.EnumValues is not null ? "(global::" + field.CSharpType + ")" + item
+            : field.Message is not null ? "(" + item + " is null ? null! : KawaProtoConversions.From" + field.Message.Name + "(" + item + "))"
+            : item;
+        return field.Repeated ? "global::System.Linq.Enumerable." + (field.IsArray ? "ToArray" : "ToList")
+            + "(global::System.Linq.Enumerable.Select(" + value + ", item => " + Convert("item") + "))" : Convert(value);
     }
 
-    private static KawaProtoMessageDefinition CreateMessage(Match match)
+    private string ResponseValue(KawaProtoFieldDefinition field, string source = "result.Value!")
     {
-        var body = match.Groups["body"].Value;
-        var fields = FieldExpression.Matches(body)
-            .Cast<Match>()
-            .Select(field => new KawaProtoFieldDefinition(
-                ToFieldName(field.Groups["name"].Value),
-                ToProtoType(field.Groups["type"].Value),
-                int.Parse(field.Groups["number"].Value, System.Globalization.CultureInfo.InvariantCulture)))
-            .ToArray();
-
-        var publicProperties = Regex.Matches(body, "public\\s+[\\w\\[\\]]+\\s+\\w+\\s*\\{", RegexOptions.CultureInvariant);
-        if (fields.Length != publicProperties.Count)
-        {
-            throw new KawaProtoSchemaException(new KawaProtoDiagnostic(
-                "KAWA5102",
-                $"Message '{match.Groups["name"].Value}' has a public member without KawaProtoField. Every serialized member requires an explicit stable field number."));
-        }
-
-        return new KawaProtoMessageDefinition(match.Groups["name"].Value, fields);
+        var value = source + "." + (field.CSharpName ?? ToPropertyName(field.Name));
+        string Convert(string item) => field.Type == "bytes" ? "global::Google.Protobuf.ByteString.CopyFrom(" + item + ")"
+            : field.EnumValues is not null ? "(global::" + CSharpNamespace + "." + field.Type + ")" + item
+            : field.Message is not null ? "(" + item + " is null ? null! : KawaProtoConversions.To" + field.Message.Name + "(" + item + "))"
+            : item;
+        return field.Repeated ? "{ global::System.Linq.Enumerable.Select(" + value + ", item => " + Convert("item") + ") }" : Convert(value);
     }
 
     private static string RemoveUseCaseSuffix(string name) => name.EndsWith("UseCase", StringComparison.Ordinal)
@@ -513,7 +544,7 @@ public sealed class KawaProtoSchemaGenerationTask : Microsoft.Build.Utilities.Ta
 
     private static string ToFieldName(string name) => char.ToLowerInvariant(name[0]) + name[1..];
 
-    private static string ToPropertyName(string name) => char.ToUpperInvariant(name[0]) + name[1..];
+    private static string ToPropertyName(string name) => string.Concat(name.Split('_').Where(part => part.Length > 0).Select(part => char.ToUpperInvariant(part[0]) + part[1..]));
 
     private static string ToProtoType(string type) => type switch
     {
@@ -601,7 +632,11 @@ public sealed record KawaProtoServiceDefinition(
     string OperationName,
     KawaProtoMessageDefinition Request,
     KawaProtoMessageDefinition Response,
-    KawaGrpcOperationKind Kind = KawaGrpcOperationKind.Unary);
+    KawaGrpcOperationKind Kind = KawaGrpcOperationKind.Unary)
+{
+    /// <summary>Gets the fully qualified implementation type for exact DI resolution.</summary>
+    public string? ImplementationType { get; init; }
+}
 
 /// <summary>
 /// Identifies the standard gRPC communication mode generated for a Kawa use case.
@@ -634,7 +669,11 @@ public enum KawaGrpcOperationKind
 /// </summary>
 /// <param name="Name">The protobuf message name.</param>
 /// <param name="Fields">The explicitly numbered message fields.</param>
-public sealed record KawaProtoMessageDefinition(string Name, IReadOnlyList<KawaProtoFieldDefinition> Fields);
+public sealed record KawaProtoMessageDefinition(string Name, IReadOnlyList<KawaProtoFieldDefinition> Fields)
+{
+    /// <summary>Gets the fully qualified CLR type of the message.</summary>
+    public string? CSharpType { get; init; }
+}
 
 /// <summary>
 /// Defines an explicitly numbered protobuf field.
@@ -642,7 +681,21 @@ public sealed record KawaProtoMessageDefinition(string Name, IReadOnlyList<KawaP
 /// <param name="Name">The protobuf field name.</param>
 /// <param name="Type">The protobuf scalar or message type.</param>
 /// <param name="Number">The stable protobuf field number.</param>
-public sealed record KawaProtoFieldDefinition(string Name, string Type, int Number);
+public sealed record KawaProtoFieldDefinition(string Name, string Type, int Number)
+{
+    /// <summary>Gets the original CLR member name.</summary>
+    public string? CSharpName { get; init; }
+    /// <summary>Gets the CLR element type of an enum or collection.</summary>
+    public string? CSharpType { get; init; }
+    /// <summary>Gets whether the field is repeated.</summary>
+    public bool Repeated { get; init; }
+    /// <summary>Gets whether the CLR collection is an array.</summary>
+    public bool IsArray { get; init; }
+    /// <summary>Gets the nested message definition, if any.</summary>
+    public KawaProtoMessageDefinition? Message { get; init; }
+    /// <summary>Gets the enum values, if this is an enum field.</summary>
+    public IReadOnlyList<KeyValuePair<string, int>>? EnumValues { get; init; }
+}
 
 /// <summary>
 /// Holds schema-generation output and diagnostics.

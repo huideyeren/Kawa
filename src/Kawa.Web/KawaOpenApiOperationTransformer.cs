@@ -50,6 +50,12 @@ internal static class KawaOpenApiOperationTransformer
             KawaErrorKind.Forbidden => StatusCodes.Status403Forbidden,
             KawaErrorKind.NotFound => StatusCodes.Status404NotFound,
             KawaErrorKind.Conflict => StatusCodes.Status409Conflict,
+            KawaErrorKind.AlreadyExists => StatusCodes.Status409Conflict,
+            KawaErrorKind.PreconditionFailed => StatusCodes.Status412PreconditionFailed,
+            KawaErrorKind.ResourceExhausted => StatusCodes.Status429TooManyRequests,
+            KawaErrorKind.Cancelled => StatusCodes.Status499ClientClosedRequest,
+            KawaErrorKind.Unavailable => StatusCodes.Status503ServiceUnavailable,
+            KawaErrorKind.DeadlineExceeded => StatusCodes.Status504GatewayTimeout,
             KawaErrorKind.Unknown => StatusCodes.Status500InternalServerError,
             _ => StatusCodes.Status500InternalServerError,
         };

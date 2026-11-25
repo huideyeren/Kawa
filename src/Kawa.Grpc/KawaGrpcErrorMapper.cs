@@ -24,6 +24,11 @@ public static class KawaGrpcErrorMapper
     {
         ArgumentNullException.ThrowIfNull(error);
 
+        if (!Enum.IsDefined(typeof(KawaErrorKind), error.Kind) || error.Kind == KawaErrorKind.Unknown)
+        {
+            error = new KawaError(KawaErrorKind.Unknown, "An unexpected error occurred.");
+        }
+
         return new KawaGrpcMappedError(
             error.Kind switch
             {

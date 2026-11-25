@@ -79,3 +79,10 @@ public sealed class EchoStreamUseCase : IDuplexStreamingUseCase<EchoRequest, Ech
 
 public sealed class EchoRequest { [KawaProtoField(1)] public string Message { get; init; } = string.Empty; }
 public sealed class EchoResponse { [KawaProtoField(1)] public string Message { get; init; } = string.Empty; }
+
+[KawaProtoService("Chat")]
+public sealed class RejectUseCase : IUseCase<SendRequest, SendResponse>
+{
+    public Task<KawaResult<SendResponse>> ExecuteAsync(SendRequest request, CancellationToken cancellationToken = default)
+        => Task.FromResult(KawaResult<SendResponse>.Success(new SendResponse { Accepted = false }));
+}

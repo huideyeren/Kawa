@@ -21,6 +21,7 @@ public sealed class ClientStreamingUseCaseExecutor
     {
         ArgumentNullException.ThrowIfNull(useCase);
         ArgumentNullException.ThrowIfNull(requests);
-        return useCase.ExecuteAsync(requests, cancellationToken);
+        return UseCaseTelemetry.RunAsync(() => useCase.ExecuteAsync(requests, cancellationToken),
+            useCase.GetType(), "usecase.client_stream");
     }
 }

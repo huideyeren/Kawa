@@ -20,6 +20,7 @@ public sealed class DuplexStreamingUseCaseExecutor
     {
         ArgumentNullException.ThrowIfNull(useCase);
         ArgumentNullException.ThrowIfNull(requests);
-        return useCase.ExecuteAsync(requests, cancellationToken);
+        return UseCaseTelemetry.Stream(() => useCase.ExecuteAsync(requests, cancellationToken),
+            useCase.GetType(), "usecase.duplex_stream", cancellationToken);
     }
 }

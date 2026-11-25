@@ -93,6 +93,44 @@ public sealed class MagicOnionTransportTests
         Assert.Equal("Tenryu", await secondReceiver.Event.Task.WaitAsync(TimeSpan.FromSeconds(5)));
     }
 
+    [Fact]
+    public async Task SharedDtoOperations_ResolveTheirOwnImplementations()
+    {
+        using var host = await CreateHostAsync(services =>
+        {
+            services.AddSingleton<IUseCase<string, string>, EchoUseCase>();
+            services.AddSingleton<IUseCase<string, string>, ReverseUseCase>();
+        });
+        using var channel = Grpc.Net.Client.GrpcChannel.ForAddress("http://localhost", new Grpc.Net.Client.GrpcChannelOptions { HttpHandler = host.GetTestServer().CreateHandler() });
+        var clientServices = new ServiceCollection();
+        Generated.EchoMagicOnionClientRegistration.AddEchoMagicOnionClient(clientServices,
+            _ => MagicOnionClient.Create<Generated.IEchoMagicOnionService>(channel));
+        using var clientProvider = clientServices.BuildServiceProvider();
+        Assert.Equal("abc", await clientProvider.GetRequiredService<Generated.IEchoMagicOnionService>().EchoAsync("abc"));
+        Assert.Equal("cba", await MagicOnionClient.Create<Generated.IReverseMagicOnionService>(channel).ReverseAsync("abc"));
+    }
+
+    [KawaMagicOnionService("reverse")]
+    public sealed class ReverseUseCase : IUseCase<string, string>
+    {
+        public Task<KawaResult<string>> ExecuteAsync(string request, CancellationToken cancellationToken = default)
+            => Task.FromResult(KawaResult<string>.Success(new string(request.Reverse().ToArray())));
+    }
+
+    [Fact]
+    public async Task HubSession_PreCancelledOperations_DoNotSendOrJoin()
+    {
+        using var provider = new ServiceCollection().AddSingleton<IStreamingHubUseCase<string,string>, ChatHubUseCase>().BuildServiceProvider();
+        var adapter = new Generated.ChatMagicOnionHubAdapter(provider, new Kawa.Core.StreamingHubUseCaseExecutor());
+        var sessionType = typeof(Generated.ChatMagicOnionHubAdapter).GetNestedType("HubSession", System.Reflection.BindingFlags.NonPublic)!;
+        var session = (IKawaHubSession<string>)Activator.CreateInstance(sessionType, adapter, "test")!;
+        var token = new CancellationToken(canceled: true);
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => session.SendAsync("must not send", token));
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => session.BroadcastToGroupAsync("room", "must not send", token));
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => session.JoinGroupAsync("room", token));
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => session.LeaveGroupAsync("room", token));
+    }
+
     [KawaMagicOnionService("echo")]
     public sealed class EchoUseCase : IUseCase<string, string>
     {

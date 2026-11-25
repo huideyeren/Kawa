@@ -26,8 +26,8 @@ public sealed class KawaHttpErrorMapper : IErrorMapper<IResult>
             KawaErrorKind.PreconditionFailed => Results.StatusCode(StatusCodes.Status412PreconditionFailed),
             KawaErrorKind.ResourceExhausted => Results.StatusCode(StatusCodes.Status429TooManyRequests),
             KawaErrorKind.Unavailable => Results.StatusCode(StatusCodes.Status503ServiceUnavailable),
-            KawaErrorKind.Unknown => Results.Problem(error.Message),
-            _ => Results.Problem(error.Message),
+            KawaErrorKind.Unknown => Results.Problem("An unexpected error occurred."),
+            _ => Results.Problem("An unexpected error occurred."),
         };
     }
 }
